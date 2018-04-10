@@ -12,21 +12,25 @@
     <PackageId>Confluent.Kafka.Avro</PackageId>
     <Title>Confluent.Kafka.Avro</Title>
     <AssemblyName>Confluent.Kafka.Avro</AssemblyName>
-    <VersionPrefix>0.11.3</VersionPrefix>
-    <TargetFrameworks>net452;</TargetFrameworks>
+    <VersionPrefix>0.11.4</VersionPrefix>
+    <TargetFrameworks>netstandard2.0;net452;</TargetFrameworks>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Confluent.Apache.Avro" Version="1.0.0-preview2" />
-    <PackageReference Include="Newtonsoft.Json" Version="10.0.3" />
+    <PackageReference Include="Confluent.Apache.Avro" Version="1.7.7.5" />
+    <PackageReference Include="Newtonsoft.Json" Version="9.0.1" />
   </ItemGroup>
-
 
   <ItemGroup>
     <ProjectReference Include="..\Confluent.Kafka\Confluent.Kafka.csproj" />
     <ProjectReference Include="..\Confluent.SchemaRegistry\Confluent.SchemaRegistry.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition=" '$(TargetFramework)' == 'netstandard2.0' ">
+    <PackageReference Include="System.Net.Sockets" Version="4.3.0" />
+    <PackageReference Include="System.Net.NameResolution" Version="4.3.0" />
   </ItemGroup>
 
 </Project>
