@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Authors>Confluent Inc.;Andreas Heider</Authors>
     <Description>Confluent's .NET Client for Apache Kafka</Description>
@@ -12,23 +12,29 @@
     <Title>Confluent.Kafka</Title>
     <AssemblyName>Confluent.Kafka</AssemblyName>
     <VersionPrefix>0.11.4</VersionPrefix>
-    <TargetFrameworks>net45;net46;netstandard1.3;</TargetFrameworks>
+    <TargetFrameworks>net45;net46;netstandard2.0;</TargetFrameworks>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Version>0.11.4-flexem3</Version>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
   </PropertyGroup>
-
-  <ItemGroup>		
-    <PackageReference Include="librdkafka.redist" Version="0.11.4" />
-    <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="4.0.0" />
-    <PackageReference Include="System.ValueTuple" Version="4.4.0" />
+  <ItemGroup>
+    <Compile Remove="Impl\SafeKafkaHandle - Copy.cs" />
   </ItemGroup>
 
-  <ItemGroup Condition=" '$(TargetFramework)' == 'netstandard1.3' ">
+  <ItemGroup>		
+    <PackageReference Include="librdkafka.redist" Version="0.11.4" />		
+    <PackageReference Include="System.Buffers" Version="4.4.0" />
+    <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="4.0.0" />
+    <PackageReference Include="System.ValueTuple" Version="4.4.0" />
+    <PackageReference Include="Utf8Json" Version="1.3.7-flexem9" />
+  </ItemGroup>
+
+  <ItemGroup Condition=" '$(TargetFramework)' == 'netstandard2.0' ">
     <PackageReference Include="System.Console" Version="4.3.0" />
     <PackageReference Include="System.Linq" Version="4.3.0" />
     <PackageReference Include="System.Runtime.InteropServices" Version="4.3.0" />
     <PackageReference Include="System.Runtime.Extensions" Version="4.3.0" />
     <PackageReference Include="System.Threading" Version="4.3.0" />
   </ItemGroup>
-
 </Project>

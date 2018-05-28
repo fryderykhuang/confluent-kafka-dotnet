@@ -17,11 +17,14 @@
 // Refer to LICENSE for more information.
 
 using System;
+using System.Buffers;
 using System.Linq;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Confluent.Kafka.Impl;
 using Confluent.Kafka.Internal;
+using Confluent.Kafka.Statistics;
 
 
 namespace Confluent.Kafka
@@ -46,11 +49,24 @@ namespace Confluent.Kafka
         }
 
         private readonly LibRdKafka.StatsDelegate _statsDelegate;
+        
+        private readonly ArrayPool<byte> _bufferPool = ArrayPool<byte>.Shared;
 
         private int StatsCallback(IntPtr rk, IntPtr json, UIntPtr json_len, IntPtr opaque)
         {
-            OnStatistics?.Invoke(this, Util.Marshal.PtrToStringUTF8(json));
-            return 0; // instruct librdkafka to immediately free the json ptr.
+            var buf = _bufferPool.Rent((int) json_len);
+            try
+            {
+                Marshal.Copy(json, buf, 0, (int) json_len);
+                var m = Utf8Json.JsonSerializer.Deserialize<StatisticsMessage>(buf, 0, Utf8Json.JsonSerializer.DefaultResolver);
+                OnStatistics?.Invoke(this, m);
+                return 0; // instruct librdkafka to immediately free the json ptr.
+            }
+            finally
+            {
+                _bufferPool.Return(buf);
+            }
+
         }
 
         private readonly LibRdKafka.LogDelegate _logDelegate;
@@ -242,7 +258,7 @@ namespace Confluent.Kafka
         /// <remarks>
         ///     Executes on the same thread as every other Consumer event handler (except OnLog which may be called from an arbitrary thread).
         /// </remarks>
-        public event EventHandler<string> OnStatistics;
+        public event EventHandler<StatisticsMessage> OnStatistics;
 
         /// <summary>
         ///     Raised when there is information that should be logged.
@@ -592,8 +608,6 @@ namespace Confluent.Kafka
         /// </summary>
         public string MemberId
             => _kafkaHandle.MemberId;
-
-        public IBufferPool BufferPool { get; }
 
 
         /// <summary>
