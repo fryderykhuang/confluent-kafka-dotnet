@@ -1004,6 +1004,13 @@ namespace Confluent.Kafka
             producer.Produce(topic, valBytes, 0, valBytes == null ? 0 : valBytes.Length, keyBytes, 0, keyBytes == null ? 0 : keyBytes.Length, timestamp, partition, blockIfQueueFull, handler);
         }
 
+        private void ProduceNull(string topic, TKey key, DateTime? timestamp, int partition, bool blockIfQueueFull, IDeliveryHandler<TKey, TValue> deliveryHandler)
+        {
+            var handler = new TypedDeliveryHandlerShim(key, default, deliveryHandler);
+            var keyBytes = KeySerializer?.Serialize(topic, key);
+            producer.Produce(topic, null, 0, 0, keyBytes, 0, keyBytes == null ? 0 : keyBytes.Length, timestamp, partition, blockIfQueueFull, handler);
+        }
+
         public void ProduceAsync(string topic, TKey key, TValue val, IDeliveryHandler<TKey, TValue> deliveryHandler)
             => Produce(topic, key, val, null, Producer.RD_KAFKA_PARTITION_UA, true, deliveryHandler);
 
@@ -1015,6 +1022,9 @@ namespace Confluent.Kafka
 
         public void ProduceAsync(string topic, TKey key, TValue val, bool blockIfQueueFull, IDeliveryHandler<TKey, TValue> deliveryHandler)
             => Produce(topic, key, val, null, Producer.RD_KAFKA_PARTITION_UA, blockIfQueueFull, deliveryHandler);
+
+        public void ProduceNullAsync(string topic, TKey key, bool blockIfQueueFull, IDeliveryHandler<TKey, TValue> deliveryHandler)
+            => ProduceNull(topic, key, null, Producer.RD_KAFKA_PARTITION_UA, blockIfQueueFull, deliveryHandler);
 
         public string Name
             => producer.Name;
@@ -1241,6 +1251,8 @@ namespace Confluent.Kafka
         public void ProduceAsync(string topic, TKey key, TValue val, bool blockIfQueueFull, IDeliveryHandler<TKey, TValue> deliveryHandler)
             => serializingProducer.ProduceAsync(topic, key, val, blockIfQueueFull, deliveryHandler);
 
+        public void ProduceNullAsync(string topic, TKey key, bool blockIfQueueFull, IDeliveryHandler<TKey, TValue> deliveryHandler)
+            => serializingProducer.ProduceNullAsync(topic, key, blockIfQueueFull, deliveryHandler);
 
         /// <summary>
         ///     Raised when there is information that should be logged.

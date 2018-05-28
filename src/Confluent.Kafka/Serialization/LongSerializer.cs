@@ -40,14 +40,22 @@ namespace Confluent.Kafka.Serialization
         public byte[] Serialize(string topic, long data)
         {
             var result = new byte[8];
-            result[0] = (byte)(data >> 56);
-            result[1] = (byte)(data >> 48);
-            result[2] = (byte)(data >> 40);
-            result[3] = (byte)(data >> 32);
-            result[4] = (byte)(data >> 24);
-            result[5] = (byte)(data >> 16);
-            result[6] = (byte)(data >> 8);
-            result[7] = (byte)data;
+            result[7] = (byte)(data >> 56);
+            result[6] = (byte)(data >> 48);
+            result[5] = (byte)(data >> 40);
+            result[4] = (byte)(data >> 32);
+            result[3] = (byte)(data >> 24);
+            result[2] = (byte)(data >> 16);
+            result[1] = (byte)(data >> 8);
+            result[0] = (byte)data;
+//            result[0] = (byte)(data >> 56);
+//            result[1] = (byte)(data >> 48);
+//            result[2] = (byte)(data >> 40);
+//            result[3] = (byte)(data >> 32);
+//            result[4] = (byte)(data >> 24);
+//            result[5] = (byte)(data >> 16);
+//            result[6] = (byte)(data >> 8);
+//            result[7] = (byte)data;
             return result;
         }
 

@@ -1,15 +1,13 @@
 using System;
-using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 
 namespace Confluent.Kafka
 {
-    public class StructureNativeDeserializer<T> : INativeDeserializer<T>
+    public class StructureNativeDeserializer<T> : INativeDeserializer<T> where T : struct
     {
-        private readonly Type _typeofT = typeof(T);
-
-        public T Deserialize(IntPtr msgBuf, uint msgLen, IntPtr msgTopic)
+        public unsafe T Deserialize(IntPtr msgBuf, uint msgLen, IntPtr msgTopic)
         {
-            return (T) Marshal.PtrToStructure(msgBuf, _typeofT);
+            return Unsafe.Read<T>(msgBuf.ToPointer());
         }
     }
 }

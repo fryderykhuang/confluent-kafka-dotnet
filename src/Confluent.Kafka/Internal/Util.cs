@@ -57,9 +57,9 @@ namespace Confluent.Kafka.Internal
             /// <returns>
             ///     A value of type <typeparamref name="T"/>
             /// </returns>
-            public static unsafe T PtrToStructureUnsafe<T>(IntPtr ptr)
+            public static unsafe ref T PtrToStructureUnsafe<T>(IntPtr ptr) where T : struct
             {
-                return Unsafe.Read<T>(ptr.ToPointer());
+                return ref Unsafe.AsRef<T>(ptr.ToPointer());
             }
 
             public static T PtrToStructure<T>(IntPtr ptr)

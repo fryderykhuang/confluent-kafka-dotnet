@@ -81,5 +81,7 @@ namespace Confluent.Kafka
         ///     Refer to <see cref="Producer{TKey, TValue}.ProduceAsync(string, TKey, TValue, bool, IDeliveryHandler{TKey, TValue})"/>.
         /// </summary>
         void ProduceAsync(string topic, TKey key, TValue val, bool blockIfQueueFull, IDeliveryHandler<TKey, TValue> deliveryHandler);
+
+        void ProduceNullAsync(string topic, TKey key, bool blockIfQueueFull, IDeliveryHandler<TKey, TValue> deliveryHandler);
     }
 }

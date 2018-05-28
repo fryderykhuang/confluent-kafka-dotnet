@@ -39,20 +39,20 @@ namespace Confluent.Kafka.Serialization
         /// </returns>
         public byte[] Serialize(string topic, float data)
         {
-            if (BitConverter.IsLittleEndian)
-            {
-                unsafe
-                {
-                    byte[] result = new byte[4];
-                    byte* p = (byte*)(&data);
-                    result[3] = *p++;
-                    result[2] = *p++;
-                    result[1] = *p++;
-                    result[0] = *p++;
-                    return result;
-                }
-            }
-            else
+//            if (BitConverter.IsLittleEndian)
+//            {
+//                unsafe
+//                {
+//                    byte[] result = new byte[4];
+//                    byte* p = (byte*)(&data);
+//                    result[3] = *p++;
+//                    result[2] = *p++;
+//                    result[1] = *p++;
+//                    result[0] = *p++;
+//                    return result;
+//                }
+//            }
+//            else
             {
                 return BitConverter.GetBytes(data);
             }

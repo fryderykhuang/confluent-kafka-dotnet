@@ -39,12 +39,13 @@ namespace Confluent.Kafka.Serialization
         /// </returns>
         public int Deserialize(string topic, byte[] data)
         {
-            // network byte order -> big endian -> most significant byte in the smallest address.
-            return
-                (((int)data[0]) << 24) |
-                (((int)data[1]) << 16) |
-                (((int)data[2]) << 8) |
-                (int)data[3];
+            return data[3] << 24 | data[2] << 16 | data[1] << 8 | data[0];
+//            // network byte order -> big endian -> most significant byte in the smallest address.
+//            return
+//                (((int)data[0]) << 24) |
+//                (((int)data[1]) << 16) |
+//                (((int)data[2]) << 8) |
+//                (int)data[3];
         }
 
         /// <include file='../include_docs.xml' path='API/Member[@name="IDeserializer_Configure"]/*' />

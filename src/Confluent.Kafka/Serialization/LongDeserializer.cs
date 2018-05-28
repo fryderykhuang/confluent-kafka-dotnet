@@ -49,15 +49,23 @@ namespace Confluent.Kafka.Serialization
                 throw new ArgumentException($"Size of {nameof(data)} received by LongDeserializer is not 8");
             }
 
-            // network byte order -> big endian -> most significant byte in the smallest address.
-            long result = ((long)data[0]) << 56 |
-                ((long)(data[1])) << 48 |
-                ((long)(data[2])) << 40 |
-                ((long)(data[3])) << 32 |
-                ((long)(data[4])) << 24 |
-                ((long)(data[5])) << 16 |
-                ((long)(data[6])) << 8 |
-                (data[7]);
+//            // network byte order -> big endian -> most significant byte in the smallest address.
+//            long result = ((long)data[0]) << 56 |
+//                          ((long)(data[1])) << 48 |
+//                          ((long)(data[2])) << 40 |
+//                          ((long)(data[3])) << 32 |
+//                          ((long)(data[4])) << 24 |
+//                          ((long)(data[5])) << 16 |
+//                          ((long)(data[6])) << 8 |
+//                          (data[7]);
+            long result = ((long)data[7]) << 56 |
+                          ((long)(data[6])) << 48 |
+                          ((long)(data[5])) << 40 |
+                          ((long)(data[4])) << 32 |
+                          ((long)(data[3])) << 24 |
+                          ((long)(data[2])) << 16 |
+                          ((long)(data[1])) << 8 |
+                          (data[0]);
             return result;
         }
 

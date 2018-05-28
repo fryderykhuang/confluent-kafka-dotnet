@@ -40,14 +40,19 @@ namespace Confluent.Kafka.Serialization
         public byte[] Serialize(string topic, int data)
         {
             var result = new byte[4]; // int is always 32 bits on .NET.
-            // network byte order -> big endian -> most significant byte in the smallest address.
-            // Note: At the IL level, the conv.u1 operator is used to cast int to byte which truncates
-            // the high order bits if overflow occurs.
-            // https://msdn.microsoft.com/en-us/library/system.reflection.emit.opcodes.conv_u1.aspx
-            result[0] = (byte)(data >> 24);
-            result[1] = (byte)(data >> 16); // & 0xff;
-            result[2] = (byte)(data >> 8); // & 0xff;
-            result[3] = (byte)data; // & 0xff;
+
+            result[0] = (byte)data;
+            result[1] = (byte) (data >> 8);
+            result[2] = (byte) (data >> 16);
+            result[3] = (byte) (data >> 24);
+//            // network byte order -> big endian -> most significant byte in the smallest address.
+//            // Note: At the IL level, the conv.u1 operator is used to cast int to byte which truncates
+//            // the high order bits if overflow occurs.
+//            // https://msdn.microsoft.com/en-us/library/system.reflection.emit.opcodes.conv_u1.aspx
+//            result[0] = (byte)(data >> 24);
+//            result[1] = (byte)(data >> 16); // & 0xff;
+//            result[2] = (byte)(data >> 8); // & 0xff;
+//            result[3] = (byte)data; // & 0xff;
             return result;
         }
 

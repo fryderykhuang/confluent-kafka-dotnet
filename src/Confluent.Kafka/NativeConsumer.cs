@@ -431,7 +431,7 @@ namespace Confluent.Kafka
             IntPtr ptr = new IntPtr();
             try
             {
-                (message, ptr, _) = ConsumerPoll((IntPtr) millisecondsTimeout);
+                (message, ptr) = ConsumerPoll((IntPtr) millisecondsTimeout);
                 if (message != null)
                 {
                     switch (message.Error.Code)
@@ -476,7 +476,7 @@ namespace Confluent.Kafka
             try
             {
                 Message<TKey, TValue> message;
-                (message, ptr, _) = ConsumerPoll((IntPtr) millisecondsTimeout);
+                (message, ptr) = ConsumerPoll((IntPtr) millisecondsTimeout);
                 if (message == null) return;
                 switch (message.Error.Code)
                 {
@@ -761,15 +761,15 @@ namespace Confluent.Kafka
             => _kafkaHandle.AddBrokers(brokers);
 
 
-        private (Message<TKey, TValue>, IntPtr, rd_kafka_message) ConsumerPoll(IntPtr millisecondsTimeout)
+        private (Message<TKey, TValue>, IntPtr) ConsumerPoll(IntPtr millisecondsTimeout)
         {
             var msgPtr = _kafkaHandle.ConsumerPoll(millisecondsTimeout);
             if (msgPtr == IntPtr.Zero)
             {
-                return (null, IntPtr.Zero, default(rd_kafka_message));
+                return (null, IntPtr.Zero);
             }
 
-            var msg = Util.Marshal.PtrToStructureUnsafe<rd_kafka_message>(msgPtr);
+            ref var msg = ref Util.Marshal.PtrToStructureUnsafe<rd_kafka_message>(msgPtr);
             long timestamp = LibRdKafka.message_timestamp(msgPtr, out IntPtr timestampType);
 
             TKey key = default(TKey);
@@ -795,7 +795,7 @@ namespace Confluent.Kafka
                 val,
                 new Timestamp(timestamp, (TimestampType) timestampType),
                 msg.err
-            ), msgPtr, msg);
+            ), msgPtr);
         }
     }
 }
