@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <ProjectTypeGuids>{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
     <Authors>Confluent Inc.;Andreas Heider</Authors>
@@ -12,10 +12,12 @@
     <PackageId>Confluent.Kafka</PackageId>
     <Title>Confluent.Kafka</Title>
     <AssemblyName>Confluent.Kafka</AssemblyName>
-    <VersionPrefix>1.0-experimental-6</VersionPrefix>
+    <VersionPrefix>1.0-experimental-5</VersionPrefix>
     <TargetFrameworks>net45;net46;netcoreapp2.1;netstandard1.3;</TargetFrameworks>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <LangVersion>7.3</LangVersion>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
   </PropertyGroup>
 
   <ItemGroup>		
