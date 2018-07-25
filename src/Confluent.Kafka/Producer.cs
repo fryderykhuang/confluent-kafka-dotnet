@@ -455,8 +455,8 @@ namespace Confluent.Kafka
 
             cancellationToken.Register(() => handler.TrySetException(new TaskCanceledException()));
 
-            var keyBytes = keySerializer?.Serialize(topic, message.Key);
-            var valBytes = valueSerializer?.Serialize(topic, message.Value);
+            var keyBytes = keySerializer.Serialize(topic, message.Key);
+            var valBytes = valueSerializer.Serialize(topic, message.Value);
 
             producer.ProduceImpl(
                 topic,
@@ -493,8 +493,8 @@ namespace Confluent.Kafka
 
             cancellationToken.Register(() => handler.TrySetException(new TaskCanceledException()));
 
-            var keyBytes = keySerializer?.Serialize(topicPartition.Topic, message.Key);
-            var valBytes = valueSerializer?.Serialize(topicPartition.Topic, message.Value);
+            var keyBytes = keySerializer.Serialize(topicPartition.Topic, message.Key);
+            var valBytes = valueSerializer.Serialize(topicPartition.Topic, message.Value);
             
             producer.ProduceImpl(
                 topicPartition.Topic, 

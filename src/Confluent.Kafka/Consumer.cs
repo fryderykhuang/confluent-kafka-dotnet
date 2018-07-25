@@ -458,6 +458,120 @@ namespace Confluent.Kafka
         }
 
 
+        public SimpleConsumeResult<TKey, TValue> ConsumeFast(int millisecondsTimeout)
+        {
+            var msgPtr = kafkaHandle.ConsumerPoll(enableTimestampMarshaling, enableHeaderMarshaling, (IntPtr)millisecondsTimeout);
+            if (msgPtr == IntPtr.Zero)
+            {
+                return default;
+            }
+
+            try
+            {
+                var msg = Util.Marshal.PtrToStructureUnsafe<rd_kafka_message>(msgPtr);
+
+                string topic = null;
+
+                if (msg.err == ErrorCode.Local_PartitionEOF)
+                {
+                    return default;
+                }
+
+                long timestampUnix = 0;
+                IntPtr timestampType = (IntPtr)TimestampType.NotAvailable;
+                if (enableTimestampMarshaling)
+                {
+                    timestampUnix = Librdkafka.message_timestamp(msgPtr, out timestampType);
+                }
+                var timestamp = new Timestamp(timestampUnix, (TimestampType)timestampType);
+
+                if (msg.err != ErrorCode.NoError)
+                {
+                    throw new ConsumeException(
+                        new ConsumeResult<byte[], byte[]>
+                        {
+                            TopicPartitionOffsetError = new TopicPartitionOffsetError(topic, msg.partition, msg.offset, new Error(msg.err)),
+                            Message = new Message<byte[], byte[]>
+                            {
+                                Timestamp = timestamp,
+                                Key = KeyAsByteArray(msg),
+                                Value = ValueAsByteArray(msg)
+                            }
+                        }
+                    );
+                }
+
+                TKey key;
+                try
+                {
+                    unsafe
+                    {
+                        key = this.KeyDeserializer.Deserialize(
+                            topic,
+                            msg.key == IntPtr.Zero ? EmptyBytes : new ReadOnlySpan<byte>(msg.key.ToPointer(), (int)msg.key_len),
+                            msg.key == IntPtr.Zero
+                        );
+                    }
+                }
+                catch (Exception ex)
+                {
+                    throw new ConsumeException(
+                        new ConsumeResult<byte[], byte[]>
+                        {
+                            TopicPartitionOffsetError = new TopicPartitionOffsetError(topic, msg.partition, msg.offset, new Error(ErrorCode.Local_KeyDeserialization, ex.ToString())),
+                            Message = new Message<byte[], byte[]>
+                            {
+                                Timestamp = timestamp,
+                                Key = KeyAsByteArray(msg),
+                                Value = ValueAsByteArray(msg)
+                            }
+                        }
+                    );
+                }
+
+                TValue val;
+                try
+                {
+                    unsafe
+                    {
+                        val = this.ValueDeserializer.Deserialize(
+                            topic,
+                            msg.val == IntPtr.Zero ? EmptyBytes : new ReadOnlySpan<byte>(msg.val.ToPointer(), (int)msg.len),
+                            msg.val == IntPtr.Zero);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    throw new ConsumeException(
+                        new ConsumeResult<byte[], byte[]>
+                        {
+                            TopicPartitionOffsetError = new TopicPartitionOffsetError(topic, msg.partition, msg.offset, new Error(ErrorCode.Local_ValueDeserialization, ex.ToString())),
+                            Message = new Message<byte[], byte[]>
+                            {
+                                Timestamp = timestamp,
+                                Key = KeyAsByteArray(msg),
+                                Value = ValueAsByteArray(msg)
+                            }
+                        }
+                    );
+                }
+
+                return new SimpleConsumeResult<TKey, TValue>
+                {
+                    Partition = msg.partition,
+                    Offset = msg.offset,
+                    Timestamp = timestamp.UtcDateTime,
+                    Key = key,
+                    Value = val
+                };
+            }
+            finally
+            {
+                Librdkafka.message_destroy(msgPtr);
+            }
+        }
+
+
         public ConsumeResult<TKey, TValue> Consume(TimeSpan timeout)
             => Consume(timeout.TotalMillisecondsAsInt());
 
