@@ -30,8 +30,7 @@ using Confluent.Kafka.Serialization;
 namespace Confluent.Kafka
 {
     /// <summary>
-    ///     Implements a high-level Apache Kafka consumer (with 
-    ///     key and value deserialization).
+    ///     Implements a high-level Apache Kafka consumer.
     /// </summary>
     public class Consumer<TKey, TValue> : IConsumer<TKey, TValue>
     {
@@ -85,7 +84,7 @@ namespace Confluent.Kafka
             var partitionList = SafeKafkaHandle.GetTopicPartitionOffsetErrorList(partitions).Select(p => p.TopicPartition).ToList();
             if (err == ErrorCode.Local_AssignPartitions)
             {
-                var handler = OnPartitionsAssigned;
+                var handler = OnPartitionAssignmentReceived;
                 if (handler != null && handler.GetInvocationList().Length > 0)
                 {
                     handler(this, partitionList);
@@ -97,7 +96,7 @@ namespace Confluent.Kafka
             }
             if (err == ErrorCode.Local_RevokePartitions)
             {
-                var handler = OnPartitionsRevoked;
+                var handler = OnPartitionAssignmentRevoked;
                 if (handler != null && handler.GetInvocationList().Length > 0)
                 {
                     handler(this, partitionList);
@@ -124,11 +123,13 @@ namespace Confluent.Kafka
 
 
         /// <summary>
-        ///     Creates a new Consumer instance.
+        ///     Creates a new <see cref="Confluent.Kafka.Consumer{TKey, TValue}" /> instance.
         /// </summary>
         /// <param name="config">
-        ///     librdkafka configuration parameters 
+        ///     A collection of librdkafka configuration parameters 
         ///     (refer to https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md)
+        ///     and parameters specific to this client (refer to: 
+        ///     <see cref="Confluent.Kafka.ConfigPropertyNames" />)
         /// </param>
         /// <param name="keyDeserializer">
         ///     An IDeserializer implementation instance for deserializing keys.
@@ -264,6 +265,7 @@ namespace Confluent.Kafka
             }
         }
 
+
         private static byte[] KeyAsByteArray(rd_kafka_message msg)
         {
             byte[] keyAsByteArray = null;
@@ -274,6 +276,7 @@ namespace Confluent.Kafka
             }
             return keyAsByteArray;       
         }
+
 
         private static byte[] ValueAsByteArray(rd_kafka_message msg)
         {
@@ -286,22 +289,7 @@ namespace Confluent.Kafka
             return valAsByteArray;
         }
 
-        /// <summary>
-        ///     Poll for new messages / consumer events. Blocks until a new 
-        ///     message or event is ready to be handled or the timeout period
-        ///     has elapsed.
-        /// </summary>
-        /// <returns>
-        ///     A consumed record, or null if no messages are 
-        ///     available for consumption.
-        ///     true: a message (with non-error state) was consumed.
-        ///     false: no message was available for consumption.
-        /// </returns>
-        /// <remarks>
-        ///     Will invoke events for OnPartitionsAssigned/Revoked,
-        ///     OnOffsetsCommitted, OnConsumeError etc. on the calling 
-        ///     thread.
-        /// </remarks>
+
         internal ConsumeResult<TKey, TValue> Consume(int millisecondsTimeout)
         {
             var msgPtr = kafkaHandle.ConsumerPoll(enableTimestampMarshaling, enableHeaderMarshaling, (IntPtr)millisecondsTimeout);
@@ -572,10 +560,41 @@ namespace Confluent.Kafka
         }
 
 
+        /// <summary>
+        ///     Poll for new messages / events. Blocks until a consume result
+        ///     is available or the timeout period has elapsed.
+        /// </summary>
+        /// <param name="timeout">
+        ///     The maximum period of time the call may block.
+        /// </param>
+        /// <returns>
+        ///     The consume result.
+        /// </returns>
+        /// <remarks>
+        ///     OnPartitionsAssigned/Revoked and OnOffsetsCommitted events
+        ///     may be invoked as a side-effect of calling this method (on 
+        ///     the same thread).
+        /// </remarks>
         public ConsumeResult<TKey, TValue> Consume(TimeSpan timeout)
             => Consume(timeout.TotalMillisecondsAsInt());
 
 
+
+        /// <summary>
+        ///     Poll for new messages / events. Blocks until a consume result
+        ///     is available or the operation has been cancelled.
+        /// </summary>
+        /// <param name="cancellationToken">
+        ///     A cancellation token that can be used to cancel this operation.
+        /// </param>
+        /// <returns>
+        ///     The consume result.
+        /// </returns>
+        /// <remarks>
+        ///     OnPartitionsAssigned/Revoked and OnOffsetsCommitted events
+        ///     may be invoked as a side-effect of calling this method (on 
+        ///     the same thread).
+        /// </remarks>
         public ConsumeResult<TKey, TValue> Consume(CancellationToken cancellationToken = default(CancellationToken))
         {
             while (true)
@@ -595,34 +614,75 @@ namespace Confluent.Kafka
         }
 
 
+        /// <summary>
+        ///     Poll for new messages / consumer events. Blocks until a consume 
+        ///     result is available or the timeout period has elapsed.
+        /// </summary>
+        /// <param name="timeout">
+        ///     The maximum period of time the call may block.
+        /// </param>
+        /// <returns>
+        ///     The consume result.
+        /// </returns>
+        /// <remarks>
+        ///     OnPartitionsAssigned/Revoked and OnOffsetsCommitted events
+        ///     may be invoked as a side-effect of calling this method (on 
+        ///     the same thread).
+        /// </remarks>
         public Task<ConsumeResult<TKey, TValue>> ConsumeAsync(TimeSpan timeout)
             => Task.Run(() => Consume(timeout));
 
 
+        /// <summary>
+        ///     Poll for new messages / consumer events. Blocks until a consume
+        ///     result is available or the operation has been cancelled.
+        /// </summary>
+        /// <param name="cancellationToken">
+        ///     A cancellation token that can be used to cancel this operation.
+        /// </param>
+        /// <returns>
+        ///     The consume result.
+        /// </returns>
+        /// <remarks>
+        ///     OnPartitionsAssigned/Revoked and OnOffsetsCommitted events
+        ///     may be invoked as a side-effect of calling this method (on 
+        ///     the same thread).
+        /// </remarks>
         public Task<ConsumeResult<TKey, TValue>> ConsumeAsync(CancellationToken cancellationToken = default(CancellationToken))
             => Task.Run(() => Consume(cancellationToken));
 
 
         /// <summary>
-        ///     Raised on new partition assignment.
-        ///     You should typically call the Consumer.Assign method in this handler.
+        ///     Raised when a new partition assignment is received.
+        /// 
+        ///     You must call the <see cref="Confluent.Kafka.Consumer{TKey, TValue}.Assign(IEnumerable{TopicPartitionOffset})" />
+        ///     method (or other overload) if you specify this handler. If no handler is provided,
+        ///     <see cref="Confluent.Kafka.Consumer{TKey, TValue}.Assign(IEnumerable{TopicPartition})" />
+        ///     will be called automatically.
         /// </summary>
         /// <remarks>
-        ///     Executes on the same thread as every other Consumer event handler 
-        ///     (except OnLog which may be called from an arbitrary thread).
+        /// 
+        ///     Executes as a side-effect of
+        ///     <see cref="Confluent.Kafka.Consumer{TKey, TValue}.Consume(CancellationToken)" />
+        ///     (on the same thread).
         /// </remarks>
-        public event EventHandler<List<TopicPartition>> OnPartitionsAssigned;
+        public event EventHandler<List<TopicPartition>> OnPartitionAssignmentReceived;
 
 
         /// <summary>
         ///     Raised when a partition assignment is revoked.
-        ///     You should typically call the Consumer.Unassign method in this handler.
+        /// 
+        ///     You must the <see cref="Confluent.Kafka.Consumer{TKey, TValue}.Assign(IEnumerable{TopicPartitionOffset})" />
+        ///     method (or other overload) if you specify this handler. If no handler is provided,
+        ///     <see cref="Confluent.Kafka.Consumer{TKey, TValue}.Unassign" /> will be called automatically.
         /// </summary>
         /// <remarks>
-        ///     Executes on the same thread as every other Consumer event handler 
-        ///     (except OnLog which may be called from an arbitrary thread).
+        ///     Executes as a side-effect of
+        ///     <see cref="Confluent.Kafka.Consumer{TKey, TValue}.Consume(CancellationToken)" />
+        ///     and <see cref="Confluent.Kafka.Consumer{TKey, TValue}.Close()" />
+        ///     (on the same thread).
         /// </remarks>
-        public event EventHandler<List<TopicPartition>> OnPartitionsRevoked;
+        public event EventHandler<List<TopicPartition>> OnPartitionAssignmentRevoked;
 
 
         /// <summary>
@@ -630,49 +690,36 @@ namespace Confluent.Kafka
         ///     Not raised as a result of the use of the Commit method.
         /// </summary>
         /// <remarks>
-        ///     Executes on the same thread as every other Consumer event handler 
-        ///     (except OnLog which may be called from an arbitrary thread).
+        ///     Executes as a side-effect of
+        ///     <see cref="Confluent.Kafka.Consumer{TKey, TValue}.Consume(CancellationToken)" />
+        ///     (on the same thread).
         /// </remarks>
         public event EventHandler<CommittedOffsets> OnOffsetsCommitted;
 
 
         /// <summary>
-        ///     Raised on critical errors, e.g. connection failures or all 
-        ///     brokers down. Note that the client will try to automatically 
-        ///     recover from errors - these errors should be seen as 
-        ///     informational rather than catastrophic
+        ///     Refer to <see cref="Confluent.Kafka.IClient.OnError" />
         /// </summary>
-        /// <remarks>
-        ///     Executes on the same thread as every other Consumer event 
-        ///     handler (except OnLog which may be called from an arbitrary thread).
-        /// </remarks>
         public event EventHandler<Error> OnError;
 
 
         /// <summary>
-        ///     Raised on librdkafka statistics events. JSON formatted
-        ///     string as defined here: https://github.com/edenhill/librdkafka/wiki/Statistics
+        ///     Refer to <see cref="Confluent.Kafka.IClient.OnStatistics" />
         /// </summary>
-        /// <remarks>
-        ///     You can enable statistics and set the statistics interval
-        ///     using the statistics.interval.ms configuration parameter
-        ///     (disabled by default).
-        ///
-        ///     Called as a side effect of calls to `Poll` (producer/consumer) or 
-        ///     `Consume` (consumer), on the same thread.
-        /// </remarks>
         public event EventHandler<string> OnStatistics;
 
 
         /// <summary>
-        ///     Gets the current partition assignment as set by Assign.
+        ///     Gets the current partition assignment as set by
+        ///     <see cref="Confluent.Kafka.Consumer{TKey, TValue}.Assign(TopicPartition)" />.
         /// </summary>
         public List<TopicPartition> Assignment
             => kafkaHandle.GetAssignment();
 
 
         /// <summary>
-        ///     Gets the current partition subscription as set by Subscribe.
+        ///     Gets the current partition subscription as set by
+        ///     <see cref="Confluent.Kafka.Consumer{TKey, TValue}.Subscribe(string)" />.
         /// </summary>
         public List<string> Subscription
             => kafkaHandle.GetSubscription();
@@ -689,6 +736,9 @@ namespace Confluent.Kafka
         ///     partition.assignment.strategy to assign the subscription sets's
         ///     topics's partitions to the consumers, depending on their subscription.
         /// </summary>
+        /// <param name="topics">
+        ///     The topics to subscribe to.
+        /// </param>
         public void Subscribe(IEnumerable<string> topics)
             => kafkaHandle.Subscribe(topics);
 
@@ -698,6 +748,9 @@ namespace Confluent.Kafka
         ///
         ///     Any previous subscription will be unassigned and unsubscribed first.
         /// </summary>
+        /// <param name="topic">
+        ///     The topic to subscribe to.
+        /// </param>
         public void Subscribe(string topic)
             => Subscribe(new[] { topic });
 
@@ -782,7 +835,7 @@ namespace Confluent.Kafka
 
         /// <summary>
         ///     Store offsets for a single partition based on the topic/partition/offset
-        ///     of a consumer record.
+        ///     of a consume result.
         /// 
         ///     The offset will be committed (written) to the offset store according
         ///     to `auto.commit.interval.ms` or manual offset-less commit().
@@ -790,14 +843,20 @@ namespace Confluent.Kafka
         /// <remarks>
         ///     `enable.auto.offset.store` must be set to "false" when using this API.
         /// </remarks>
-        /// <param name="record">
-        ///     A consumer record used to determine the offset to store and topic/partition.
+        /// <param name="result">
+        ///     A consume result used to determine the offset to store and topic/partition.
         /// </param>
         /// <returns>
         ///     Current stored offset or a partition specific error.
         /// </returns>
-        public TopicPartitionOffsetError StoreOffset(ConsumeResult<TKey, TValue> record)
-            => StoreOffsets(new[] { new TopicPartitionOffset(record.TopicPartition, record.Offset + 1) })[0];
+        /// <exception cref="Confluent.Kafka.KafkaException">
+        ///     Thrown if the request failed.
+        /// </exception>
+        /// <exception cref="Confluent.Kafka.TopicPartitionOffsetException">
+        ///     Thrown if result is in error.
+        /// </exception>
+        public void StoreOffset(ConsumeResult<TKey, TValue> result)
+            => StoreOffsets(new[] { new TopicPartitionOffset(result.TopicPartition, result.Offset + 1) });
 
 
         /// <summary>
@@ -816,37 +875,71 @@ namespace Confluent.Kafka
         ///     For each topic/partition returns current stored offset
         ///     or a partition specific error.
         /// </returns>
-        public List<TopicPartitionOffsetError> StoreOffsets(IEnumerable<TopicPartitionOffset> offsets)
+        /// <exception cref="Confluent.Kafka.KafkaException">
+        ///     Thrown if the request failed.
+        /// </exception>
+        /// <exception cref="Confluent.Kafka.TopicPartitionOffsetException">
+        ///     Thrown if any of the constituent results is in error. The entire result
+        ///     (which may contain constituent results that are not in error) is available
+        ///     via the <see cref="Confluent.Kafka.TopicPartitionOffsetException.Results" />
+        ///     property of the exception.
+        /// </exception>
+        public void StoreOffsets(IEnumerable<TopicPartitionOffset> offsets)
             => kafkaHandle.StoreOffsets(offsets);
 
 
         /// <summary>
-        ///     Commit offsets for the current assignment.
+        ///     Commit all offsets for the current assignment.
         /// </summary>
-        public Task<List<TopicPartitionOffsetError>> CommitAsync(CancellationToken cancellationToken = default(CancellationToken))
+        /// <param name="cancellationToken">
+        ///     A cancellation token that can be used to cancel this operation
+        ///     (currently ignored).
+        /// </param>
+        /// <exception cref="Confluent.Kafka.KafkaException">
+        ///     Thrown if the request failed.
+        /// </exception>
+        /// <exception cref="Confluent.Kafka.TopicPartitionOffsetException">
+        ///     Thrown if any of the constituent results is in error. The entire result
+        ///     (which may contain constituent results that are not in error) is available
+        ///     via the <see cref="Confluent.Kafka.TopicPartitionOffsetException.Results" />
+        ///     property of the exception.
+        /// </exception>
+        public Task<List<TopicPartitionOffset>> CommitAsync(CancellationToken cancellationToken = default(CancellationToken))
+            // TODO: use a librdkafka queue for this.
             => Task.Run(() => kafkaHandle.CommitSync(null));
 
 
         /// <summary>
-        ///     Commits an offset based on the topic/partition/offset of a message.
-        ///     The next message to be read will be that following <paramref name="record" />.
+        ///     Commits an offset based on the topic/partition/offset of a ConsumeResult.
+        ///     The next message to be read will be that following <paramref name="result" />.
         /// </summary>
-        /// <param name="record">
-        ///     The ConsumerRecord instance used to determine the committed offset.
+        /// <param name="result">
+        ///     The ConsumeResult instance used to determine the committed offset.
         /// </param>
         /// <remarks>
-        ///     A consumer which has position N has consumed records with offsets 0 through N-1 
-        ///     and will next receive the record with offset N. Hence, this method commits an 
-        ///     offset of <paramref name="record" />.Offset + 1.
+        ///     A consumer which has position N has consumed messages with offsets 0 through N-1 
+        ///     and will next receive the message with offset N. Hence, this method commits an 
+        ///     offset of <paramref name="result" />.Offset + 1.
         /// </remarks>
-        public Task<List<TopicPartitionOffsetError>> CommitAsync(ConsumeResult<TKey, TValue> record, CancellationToken cancellationToken = default(CancellationToken))
+        /// <param name="cancellationToken">
+        ///     A cancellation token that can be used to cancel this operation
+        ///     (currently ignored).
+        /// </param>
+        /// <exception cref="Confluent.Kafka.KafkaException">
+        ///     Thrown if the request failed.
+        /// </exception>
+        /// <exception cref="Confluent.Kafka.TopicPartitionOffsetException">
+        ///     Thrown if the result is in error.
+        /// </exception>
+        public Task<TopicPartitionOffset> CommitAsync(
+            ConsumeResult<TKey, TValue> result, CancellationToken cancellationToken = default(CancellationToken))
         {
-            if (record.Error.Code != ErrorCode.NoError)
+            if (result.Error.Code != ErrorCode.NoError)
             {
                 throw new InvalidOperationException("Attempt was made to commit offset corresponding to an errored message");
             }
 
-            return CommitAsync(new[] { new TopicPartitionOffset(record.TopicPartition, record.Offset + 1) }, cancellationToken);
+            return Task.Run(() => kafkaHandle.CommitSync(new [] { new TopicPartitionOffset(result.TopicPartition, result.Offset + 1) })[0]);
         }
 
 
@@ -854,24 +947,44 @@ namespace Confluent.Kafka
         ///     Commit an explicit list of offsets.
         /// </summary>
         /// <remarks>
-        ///     Note: A consumer which has position N has consumed records with offsets 0 through N-1 
-        ///     and will next receive the record with offset N.
+        ///     Note: A consumer which has position N has consumed messages with offsets 0 through N-1 
+        ///     and will next receive the message with offset N.
         /// </remarks>
-        public Task<List<TopicPartitionOffsetError>> CommitAsync(IEnumerable<TopicPartitionOffset> offsets, CancellationToken cancellationToken = default(CancellationToken))
+        /// <param name="offsets">
+        ///     The topic/partition offsets to commit.
+        /// </param>
+        /// <param name="cancellationToken">
+        ///     A cancellation token that can be used to cancel this operation
+        ///     (currently ignored).
+        /// </param>
+        /// <exception cref="Confluent.Kafka.KafkaException">
+        ///     Thrown if the request failed.
+        /// </exception>
+        /// <exception cref="Confluent.Kafka.TopicPartitionOffsetException">
+        ///     Thrown if any of the constituent results is in error. The entire result
+        ///     (which may contain constituent results that are not in error) is available
+        ///     via the <see cref="Confluent.Kafka.TopicPartitionOffsetException.Results" />
+        ///     property of the exception.
+        /// </exception>
+        public Task CommitAsync(IEnumerable<TopicPartitionOffset> offsets, CancellationToken cancellationToken = default(CancellationToken))
+            // TODO: use a librdkafka queue for this.
             => Task.Run(() => kafkaHandle.CommitSync(offsets));
 
 
         /// <summary>
-        ///     Seek consumer for topic+partition to <parmref name="offset"/> which is either an
-        ///     absolute or logical offset. This must only be done for partitions that are 
+        ///     Seek to <parmref name="offset"/> on the specified topic/partition which is either
+        ///     an absolute or logical offset. This must only be done for partitions that are 
         ///     currently being consumed (i.e., have been Assign()ed). To set the start offset for 
         ///     not-yet-consumed partitions you should use the 
-        ///     <see cref="Confluent.Kafka.Consumer.Assign(IEnumerable{TopicPartitionOffset})" /> 
-        ///     method instead.
+        ///     <see cref="Confluent.Kafka.Consumer{TKey, TValue}.Assign(TopicPartitionOffset)" /> 
+        ///     method (or other overload) instead.
         /// </summary>
         /// <param name="tpo">
         ///     The topic/partition to seek on and the offset to seek to.
         /// </param>
+        /// <exception cref="Confluent.Kafka.KafkaException">
+        ///     Thrown if the request failed.
+        /// </exception>
         public void Seek(TopicPartitionOffset tpo)
             => kafkaHandle.Seek(tpo.Topic, tpo.Partition, tpo.Offset, -1);
 
@@ -882,10 +995,13 @@ namespace Confluent.Kafka
         /// <param name="partitions">
         ///     The partitions to pause consumption of.
         /// </param>
-        /// <returns>
+        /// <exception cref="Confluent.Kafka.KafkaException">
+        ///     Thrown if the request failed.
+        /// </exception>
+        /// <exception cref="Confluent.Kafka.TopicPartitionException">
         ///     Per partition success or error.
-        /// </returns>
-        public List<TopicPartitionError> Pause(IEnumerable<TopicPartition> partitions)
+        /// </exception>
+        public void Pause(IEnumerable<TopicPartition> partitions)
             => kafkaHandle.Pause(partitions);
 
 
@@ -895,27 +1011,48 @@ namespace Confluent.Kafka
         /// <param name="partitions">
         ///     The partitions to resume consumption of.
         /// </param>
-        /// <returns>
+        /// <exception cref="Confluent.Kafka.KafkaException">
+        ///     Thrown if the request failed.
+        /// </exception>
+        /// <exception cref="Confluent.Kafka.TopicPartitionException">
         ///     Per partition success or error.
-        /// </returns>
-        public List<TopicPartitionError> Resume(IEnumerable<TopicPartition> partitions)
+        /// </exception>
+        public void Resume(IEnumerable<TopicPartition> partitions)
             => kafkaHandle.Resume(partitions);
 
 
         /// <summary>
-        ///     Retrieve current committed offsets for topics + partitions.
+        ///     Retrieve current committed offsets for the specified topic/partitions.
         ///
         ///     The offset field of each requested partition will be set to the offset
         ///     of the last consumed message, or Offset.Invalid in case there was
-        ///     no previous message, or, alternately a partition specific error may also be
-        ///     returned.
-        ///
-        ///     throws KafkaException if there was a problem retrieving the above information.
+        ///     no previous message, or, alternately a partition specific error may also
+        ///     be returned.
         /// </summary>
-        public Task<List<TopicPartitionOffsetError>> CommittedAsync(
+        /// <param name="partitions">
+        ///     the partitions to get the committed offsets for.
+        /// </param>
+        /// <param name="timeout">
+        ///     The maximum period of time the call may block.
+        /// </param>
+        /// <param name="cancellationToken">
+        ///     A cancellation token that can be used to cancel this operation
+        ///     (currently ignored).
+        /// </param>
+        /// <exception cref="Confluent.Kafka.KafkaException">
+        ///     Thrown if the request failed.
+        /// </exception>
+        /// <exception cref="Confluent.Kafka.TopicPartitionOffsetException">
+        ///     Thrown if any of the constituent results is in error. The entire result
+        ///     (which may contain constituent results that are not in error) is available
+        ///     via the <see cref="Confluent.Kafka.TopicPartitionOffsetException.Results" />
+        ///     property of the exception.
+        /// </exception>
+        public Task<List<TopicPartitionOffset>> CommittedAsync(
             IEnumerable<TopicPartition> partitions, TimeSpan timeout,
             CancellationToken cancellationToken = default(CancellationToken)
         )
+            // TODO: use a librdkafka queue for this.
             => Task.Run(() => kafkaHandle.Committed(partitions, (IntPtr)timeout.TotalMillisecondsAsInt()));
 
 
@@ -924,22 +1061,32 @@ namespace Confluent.Kafka
         ///
         ///     The offset field of each requested partition will be set to the offset
         ///     of the last consumed message + 1, or Offset.Invalid in case there was
-        ///     no previous message consumed by this consumer, or, alternately a partition
-        ///     specific error may also be returned.
+        ///     no previous message consumed by this consumer.
         /// </summary>
-        public Task<List<TopicPartitionOffsetError>> PositionAsync(IEnumerable<TopicPartition> partitions)
-            => Task.Run(() => kafkaHandle.Position(partitions));
+        /// <exception cref="Confluent.Kafka.KafkaException">
+        ///     Thrown if the request failed.
+        /// </exception>
+        /// <exception cref="Confluent.Kafka.TopicPartitionOffsetException">
+        ///     Thrown if any of the constituent results is in error. The entire result
+        ///     (which may contain constituent results that are not in error) is available
+        ///     via the <see cref="Confluent.Kafka.TopicPartitionOffsetException.Results" />
+        ///     property of the exception.
+        /// </exception>
+        public List<TopicPartitionOffset> Position(IEnumerable<TopicPartition> partitions)
+            // TODO: use a librdkafka queue for this.
+            => kafkaHandle.Position(partitions);
 
 
         /// <summary>
-        ///     Look up the offsets for the given partitions by timestamp. The returned offset for each partition is the
-        ///     earliest offset whose timestamp is greater than or equal to the given timestamp in the corresponding partition.
+        ///     Look up the offsets for the given partitions by timestamp. The returned
+        ///     offset for each partition is the earliest offset whose timestamp is greater
+        ///     than or equal to the given timestamp in the corresponding partition.
         /// </summary>
         /// <remarks>
-        ///     This is a blocking call. The consumer does not have to be assigned the partitions.
-        ///     If the message format version in a partition is before 0.10.0, i.e. the messages do not have timestamps, null
-        ///     will be returned for that partition.
-        ///     Note that this method may block for the maximum timeout period if the partition does not exist.
+        ///     This is a blocking call. It will block for the timeout period if the 
+        ///     partition does not exist. 
+        ///
+        ///     The consumer does not need to be assigned to the requested partitions.
         /// </remarks>
         /// <param name="timestampsToSearch">
         ///     The mapping from partition to the timestamp to look up.
@@ -948,61 +1095,47 @@ namespace Confluent.Kafka
         ///     The maximum period of time the call may block.
         /// </param>
         /// <param name="cancellationToken">
-        ///     A cancellation token that can be used to cancel this operation.
+        ///     A cancellation token that can be used to cancel this operation
+        ///     (currently ignored).
         /// </param>
         /// <returns>
-        ///    A mapping from partition to the timestamp and offset of the first message with timestamp greater
-        ///    than or equal to the target timestamp. null will be returned for the partition if there is no such message.
+        ///     A mapping from partition to the timestamp and offset of the first message with
+        ///     timestamp greater than or equal to the target timestamp.
         /// </returns>
-        public Task<IEnumerable<TopicPartitionOffsetError>> OffsetsForTimesAsync(
+        /// <exception cref="Confluent.Kafka.KafkaException">
+        ///     Thrown if the operation fails.
+        /// </exception>
+        /// <exception cref="Confluent.Kafka.TopicPartitionOffsetException">
+        ///     Thrown if any of the constituent results is in error. The entire result
+        ///     (which may contain constituent results that are not in error) is available
+        ///     via the <see cref="Confluent.Kafka.TopicPartitionOffsetException.Results" />
+        ///     property of the exception.
+        /// </exception>
+        public Task<List<TopicPartitionOffset>> OffsetsForTimesAsync(
             IEnumerable<TopicPartitionTimestamp> timestampsToSearch, TimeSpan timeout,
             CancellationToken cancellationToken = default(CancellationToken)
         )
+            // TODO: use a librdkafka queue for this.
             => Task.Run(() => kafkaHandle.OffsetsForTimes(timestampsToSearch, timeout.TotalMillisecondsAsInt()));
 
 
         /// <summary>
-        ///     Gets the (dynamic) group member id of this consumer (as set by the broker).
+        ///     Gets the (dynamic) group member id of this consumer (as 
+        ///     set by the broker).
         /// </summary>
         public string MemberId
             => kafkaHandle.MemberId;
 
 
         /// <summary>
-        ///     Adds one or more brokers to the Client's list of initial
-        ///     bootstrap brokers. 
-        ///
-        ///     Note: Additional brokers are discovered automatically as
-        ///     soon as the Client connects to any broker by querying the
-        ///     broker metadata. Calling this method is only required in
-        ///     some scenarios where the address of all brokers in the
-        ///     cluster changes.
+        ///     Refer to <see cref="Confluent.Kafka.IClient.AddBrokers(string)" />
         /// </summary>
-        /// <param name="brokers">
-        ///     Comma-separated list of brokers in the same format as 
-        ///     the bootstrap.server configuration parameter.
-        /// </param>
-        /// <remarks>
-        ///     There is currently no API to remove existing configured, 
-        ///     added or learnt brokers.
-        /// </remarks>
-        /// <returns>
-        ///     The number of brokers added. This value includes brokers
-        ///     that may have been specified a second time.
-        /// </returns>
         public int AddBrokers(string brokers)
             => kafkaHandle.AddBrokers(brokers);
 
-
         /// <summary>
-        ///     Gets the name of this client instance.
-        ///     Contains (but is not equal to) the client.id configuration parameter.
+        ///     Refer to <see cref="Confluent.Kafka.IClient.Name" />
         /// </summary>
-        /// <remarks>
-        ///     This name will be unique across all client instances
-        ///     in a given application which allows log messages to be
-        ///     associated with the corresponding instance.
-        /// </remarks>
         public string Name
             => kafkaHandle.Name;
 
@@ -1018,30 +1151,49 @@ namespace Confluent.Kafka
 
         /// <summary>
         ///     Alerts the group coodinator that the consumer is exiting the group
-        ///     then releases all resources used by this Consumer. If you do not
-        ///     call Close before the consumer instance is disposed (or your application
-        ///     exits), the group rebalance will not be immediate - it will occur after
-        ///     the period of time specified by the broker config `group.max.session.timeout.ms`.
+        ///     then releases all resources used by this consumer. If you do not
+        ///     call <see cref="Confluent.Kafka.Consumer{TKey, TValue}.Close" /> before 
+        ///     the consumer instance is disposed (or your application exits), the
+        ///     group rebalance will not be immediate - it will occur after the period
+        ///     of time specified by the broker config `group.max.session.timeout.ms`.
         /// </summary>
+        /// <remarks>
+        ///     Note: Currently the <see cref="Confluent.Kafka.Consumer{TKey, TValue}.Dispose" />
+        ///     method actually does call this method automatically. In the future, the
+        ///     behavior of <see cref="Confluent.Kafka.Consumer{TKey, TValue}.Dispose" /> will be
+        ///     changed so that it does not.
+        /// </remarks>
+        /// <exception cref="Confluent.Kafka.KafkaException">
+        ///     Thrown if the operation fails.
+        /// </exception>
         public void Close()
-        {
-            kafkaHandle.ConsumerClose();
-            this.Dispose();
-        }
+            => kafkaHandle.ConsumerClose();
 
 
         /// <summary>
-        ///     Releases all resources used by this Consumer. Does not block. Typically,
-        ///     you should call Close instead of (or in addition to) Dispose to ensure a
-        ///     speedy group rebalance. 
+        ///     Releases all resources used by this Consumer. You should call 
+        ///     <see cref="Confluent.Kafka.Consumer{TKey, TValue}.Close" /> prior to 
+        ///     this method. In the current implementation, if you have not previously
+        ///     called <see cref="Confluent.Kafka.Consumer{TKey, TValue}.Close" />, this
+        ///     will be called automatically for you as a side effect of calling this
+        ///     method, which is (a) a blocking operation and (b) will result in the 
+        ///     <see cref="Confluent.Kafka.Consumer{TKey, TValue}.OnPartitionAssignmentRevoked" />
+        ///     event being triggered (if handlers have been added) which may result in
+        ///     an exception (if your handler(s) can throw exceptions). In the future,
+        ///     we will change the Dispose method to not call
+        ///     <see cref="Confluent.Kafka.Consumer{TKey, TValue}.Close" />
+        ///     and to never block. The current behavior is at-odds with
+        ///     .NET conventions but reflects the operation of the underlying librdkafka
+        ///     library.
         /// </summary>
         public void Dispose()
         {
-            // note: consumers always own their own handles.
+            // consumers always own their own handles.
             KeyDeserializer?.Dispose();
             ValueDeserializer?.Dispose();
 
             kafkaHandle.Dispose();
+            kafkaHandle.FlagAsClosed();
         }
     }
 }

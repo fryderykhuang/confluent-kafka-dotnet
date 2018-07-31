@@ -49,7 +49,7 @@ namespace Confluent.Kafka.IntegrationTests
                 IEnumerable<TopicPartition> assignedPartitions = null;
                 ConsumeResult<Null, string> record;
 
-                consumer.OnPartitionsAssigned += (_, partitions) =>
+                consumer.OnPartitionAssignmentReceived += (_, partitions) =>
                 {
                     consumer.Assign(partitions);
                     assignedPartitions = partitions;
@@ -75,6 +75,10 @@ namespace Confluent.Kafka.IntegrationTests
                 consumer.Resume(assignedPartitions);
                 record = consumer.Consume(TimeSpan.FromSeconds(10));
                 Assert.NotNull(record.Message);
+
+                // check that these don't throw.
+                consumer.Pause(new List<TopicPartition>());
+                consumer.Resume(new List<TopicPartition>());
 
                 consumer.Close();
             }

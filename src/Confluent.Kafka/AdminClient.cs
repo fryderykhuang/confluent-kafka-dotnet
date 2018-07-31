@@ -457,8 +457,10 @@ namespace Confluent.Kafka
         ///     Initialize a new AdminClient instance.
         /// </summary>
         /// <param name="config">
-        ///     librdkafka configuration parameters (refer to 
-        ///     https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md).
+        ///     A collection of librdkafka configuration parameters 
+        ///     (refer to https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md)
+        ///     and parameters specific to this client (refer to: 
+        ///     <see cref="Confluent.Kafka.ConfigPropertyNames" />)
         /// </param>
         public AdminClient(IEnumerable<KeyValuePair<string, object>> config)
         {
@@ -509,24 +511,58 @@ namespace Confluent.Kafka
         }
 
 
-#region Groups
-        /// <include file='include_docs_client.xml' path='API/Member[@name="ListGroups_TimeSpan"]/*' />
+        /// <summary>
+        ///     Get information pertaining to all groups in the Kafka cluster (blocking)
+        ///
+        ///     [API-SUBJECT-TO-CHANGE] - The API associated with this functionality 
+        ///     is subject to change.
+        /// </summary>
+        /// <param name="timeout">
+        ///     The maximum period of time the call may block.
+        /// </param>
         public List<GroupInfo> ListGroups(TimeSpan timeout)
             => kafkaHandle.ListGroups(timeout.TotalMillisecondsAsInt());
 
-        /// <include file='include_docs_client.xml' path='API/Member[@name="ListGroup_string_TimeSpan"]/*' />
+
+        /// <summary>
+        ///     Get information pertaining to a particular group in the
+        ///     Kafka cluster (blocking).
+        ///
+        ///     [API-SUBJECT-TO-CHANGE] - The API associated with this functionality is subject to change.
+        /// </summary>
+        /// <param name="group">
+        ///     The group of interest.
+        /// </param>
+        /// <param name="timeout">
+        ///     The maximum period of time the call may block.
+        /// </param>
+        /// <returns>
+        ///     Returns information pertaining to the specified group
+        ///     or null if this group does not exist.
+        /// </returns>
         public GroupInfo ListGroup(string group, TimeSpan timeout)
             => kafkaHandle.ListGroup(group, timeout.TotalMillisecondsAsInt());
 
-        /// <include file='include_docs_client.xml' path='API/Member[@name="ListGroup_string"]/*' />
+
+        ///  <summary>
+        ///     Get information pertaining to a particular group in the
+        ///     Kafka cluster (blocks, potentially indefinitely).
+        ///
+        ///     [API-SUBJECT-TO-CHANGE] - The API associated with this functionality is subject to change.
+        /// </summary>
+        /// <param name="group">
+        ///     The group of interest.
+        /// </param>
+        /// <returns>
+        ///     Returns information pertaining to the specified group
+        ///     or null if this group does not exist.
+        /// </returns>
         public GroupInfo ListGroup(string group)
             => kafkaHandle.ListGroup(group, -1);
-#endregion
 
-#region WatermarkOffsets
 
         /// <summary>
-        ///     Get last known low (oldest/beginning) and high (newest/end)
+        ///     Get last known low (oldest available/beginning) and high (newest/end)
         ///     offsets for a topic/partition.
         /// </summary>
         /// <remarks>
@@ -540,7 +576,7 @@ namespace Confluent.Kafka
         ///     The topic/partition of interest.
         /// </param>
         /// <returns>
-        ///     The requested WatermarkOffsets.
+        ///     The requested WatermarkOffsets (see that class for additional documentation).
         /// </returns>
         public WatermarkOffsets GetWatermarkOffsets(TopicPartition topicPartition)
         {
@@ -552,8 +588,9 @@ namespace Confluent.Kafka
             return kafkaHandle.GetWatermarkOffsets(topicPartition.Topic, topicPartition.Partition);
         }
 
+
         /// <summary>
-        ///     Query the Kafka cluster for low (oldest/beginning) and high (newest/end)
+        ///     Query the Kafka cluster for low (oldest available/beginning) and high (newest/end)
         ///     offsets for the specified topic/partition (blocking).
         /// </summary>
         /// <param name="topicPartition">
@@ -563,37 +600,32 @@ namespace Confluent.Kafka
         ///     The maximum period of time the call may block.
         /// </param>
         /// <returns>
-        ///     The requested WatermarkOffsets.
+        ///     The requested WatermarkOffsets (see that class for additional documentation).
         /// </returns>
         public WatermarkOffsets QueryWatermarkOffsets(TopicPartition topicPartition, TimeSpan timeout)
             => kafkaHandle.QueryWatermarkOffsets(topicPartition.Topic, topicPartition.Partition, timeout.TotalMillisecondsAsInt());
 
 
         /// <summary>
-        ///     Query the Kafka cluster for low (oldest/beginning) and high (newest/end)
-        ///     offsets for the specified topic/partition (blocks, potentially indefinitely).
+        ///     Query the cluster for metadata corresponding to all topics in the cluster (blocking).
+        ///
+        ///     [API-SUBJECT-TO-CHANGE] - The API associated with this functionality is subject to change.
         /// </summary>
-        /// <param name="topicPartition">
-        ///     The topic/partition of interest.
-        /// </param>
-        /// <param name="cancellationToken">
-        ///     
-        /// </param>
-        /// <returns>
-        ///     The requested WatermarkOffsets.
-        /// </returns>
-        public WatermarkOffsets QueryWatermarkOffsets(TopicPartition topicPartition)
-            => kafkaHandle.QueryWatermarkOffsets(topicPartition.Topic, topicPartition.Partition, -1);
-#endregion
-
-
-#region Metadata
         private SafeTopicHandle getKafkaTopicHandle(string topic) 
             => topicHandles.GetOrAdd(topic, topicHandlerFactory);
 
-        /// <include file='include_docs_client.xml' path='API/Member[@name="GetMetadata_bool_TimeSpan"]/*' />
+
+        /// <summary>
+        ///     Query the cluster for metadata.
+        ///
+        ///     - allTopics = true - request all topics from cluster
+        ///     - allTopics = false - request only locally known topics.
+        /// 
+        ///     [API-SUBJECT-TO-CHANGE] - The API associated with this functionality is subject to change.
+        /// </summary>
         public Metadata GetMetadata(bool allTopics, TimeSpan timeout)
             => kafkaHandle.GetMetadata(allTopics, null, timeout.TotalMillisecondsAsInt());
+
 
         /// <summary>
         ///     Query the cluster for metadata (blocking).
@@ -601,30 +633,42 @@ namespace Confluent.Kafka
         ///     - allTopics = true - request all topics from cluster
         ///     - allTopics = false, topic = null - request only locally known topics.
         ///     - allTopics = false, topic = valid - request specific topic
+        /// 
+        ///     [API-SUBJECT-TO-CHANGE] - The API associated with this functionality is subject to change.
         /// </summary>
         public Metadata GetMetadata(bool allTopics, string topic, TimeSpan timeout)
             => kafkaHandle.GetMetadata(
                 allTopics, 
                 topic == null ? null : getKafkaTopicHandle(topic), 
                 timeout.TotalMillisecondsAsInt());
-#endregion
 
-        /// <include file='include_docs_client.xml' path='API/Member[@name="AddBrokers_string"]/*' />
+
+        /// <summary>
+        ///     Refer to <see cref="Confluent.Kafka.IClient.AddBrokers(string)" />
+        /// </summary>
         public int AddBrokers(string brokers)
             => kafkaHandle.AddBrokers(brokers);
 
-        /// <include file='include_docs_client.xml' path='API/Member[@name="Client_Name"]/*' />
+
+        /// <summary>
+        ///     Refer to <see cref="Confluent.Kafka.IClient.Name" />
+        /// </summary>
         public string Name
             => kafkaHandle.Name;
 
+
         /// <summary>
-        ///     An opaque reference to the underlying librdkafka client instance.
+        ///     An opaque reference to the underlying librdkafka 
+        ///     client instance.
         /// </summary>
         public Handle Handle
             => handle;
 
+
         /// <summary>
-        ///     Releases all resources used by this client.
+        ///     Releases all resources used by this Producer. In the current
+        ///     implementation, this method may block for up to 100ms. This 
+        ///     will be replaced with a non-blocking version in the future.
         /// </summary>
         public void Dispose()
         {
@@ -660,17 +704,24 @@ namespace Confluent.Kafka
             if (handle.Owner == this)
             {
                 ownedClient.Dispose();
+                ownedClient.Handle.LibrdkafkaHandle.FlagAsClosed();
             }
         }
 
-        /// <include file='include_docs_client.xml' path='API/Member[@name="OnStatistics"]/*' />
+
+        /// <summary>
+        ///     Refer to <see cref="Confluent.Kafka.IClient.OnStatistics" />
+        /// </summary>
         public event EventHandler<string> OnStatistics
         {
             add { this.handle.Owner.OnStatistics += value; }
             remove { this.handle.Owner.OnStatistics -= value; }
         }
 
-        /// <include file='include_docs_producer.xml' path='API/Member[@name="OnError"]/*' />
+
+        /// <summary>
+        ///     Refer to <see cref="Confluent.Kafka.IClient.OnError" />
+        /// </summary>
         public event EventHandler<Error> OnError
         {
             add { this.handle.Owner.OnError += value; }

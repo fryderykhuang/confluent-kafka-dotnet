@@ -29,13 +29,13 @@ namespace Confluent.Kafka.IntegrationTests
     public static partial class Tests
     {
         /// <summary>
-        ///     Basic DeserializingConsumer test (poll mode).
+        ///     Basic DeserializingConsumer test (consume mode).
         /// </summary>
         [Theory, MemberData(nameof(KafkaParameters))]
-        public static void Consumer_Poll(string bootstrapServers, string singlePartitionTopic, string partitionedTopic)
+        public static void Consumer_Assignment(string bootstrapServers, string singlePartitionTopic, string partitionedTopic)
         {
             int N = 2;
-            var firstProduced = Util.ProduceMessages(bootstrapServers, singlePartitionTopic, 100, N);
+            var firstProduced = Util.ProduceMessages(bootstrapServers, singlePartitionTopic, 1, N);
 
             var consumerConfig = new Dictionary<string, object>
             {
@@ -46,14 +46,19 @@ namespace Confluent.Kafka.IntegrationTests
 
             using (var consumer = new Consumer<Null, string>(consumerConfig, null, new StringDeserializer(Encoding.UTF8)))
             {
-                int msgCnt = 0;
-                bool done = false;
+                // Test empty case.
+                Assert.Empty(consumer.Assignment);
 
                 consumer.OnPartitionAssignmentReceived += (_, partitions) =>
                 {
                     Assert.Single(partitions);
                     Assert.Equal(firstProduced.TopicPartition, partitions[0]);
                     consumer.Assign(partitions.Select(p => new TopicPartitionOffset(p, firstProduced.Offset)));
+
+                    // test non-empty case.
+                    Assert.Single(consumer.Assignment);
+                    Assert.Equal(singlePartitionTopic, consumer.Assignment[0].Topic);
+                    Assert.Equal(0, (int)consumer.Assignment[0].Partition);
                 };
 
                 consumer.OnPartitionAssignmentRevoked += (_, partitions)
@@ -61,23 +66,7 @@ namespace Confluent.Kafka.IntegrationTests
 
                 consumer.Subscribe(singlePartitionTopic);
 
-                while (!done)
-                {
-                    var record = consumer.Consume(TimeSpan.FromMilliseconds(100));
-                    if (record.Message != null)
-                    {
-                        Assert.Equal(ErrorCode.NoError, record.Error.Code);
-                        Assert.Equal(TimestampType.CreateTime, record.Message.Timestamp.Type);
-                        Assert.True(Math.Abs((DateTime.UtcNow - record.Message.Timestamp.UtcDateTime).TotalMinutes) < 1.0);
-                        msgCnt += 1;
-                    }
-                    if (record.IsPartitionEOF)
-                    {
-                        done = true;
-                    }
-                }
-
-                Assert.Equal(N, msgCnt);
+                var r = consumer.Consume(TimeSpan.FromSeconds(20));
 
                 consumer.Close();
             }
