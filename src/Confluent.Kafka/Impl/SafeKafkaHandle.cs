@@ -268,35 +268,30 @@ namespace Confluent.Kafka.Impl
             fixed (byte* valPtr = val)
             fixed (byte* keyPtr = key)
             {
-
-
                 IntPtr headersPtr = marshalHeaders(headers);
 
                 try
                 {
-                    unsafe
+                    var errorCode = Librdkafka.producev(
+                        handle,
+                        topic,
+                        partition,
+                        (IntPtr)MsgFlags.MSG_F_COPY,
+                        (IntPtr)valPtr, (UIntPtr) val.Length,
+                        (IntPtr)keyPtr, (UIntPtr) key.Length,
+                        timestamp,
+                        headersPtr,
+                        opaque);
+
+                    if (errorCode != ErrorCode.NoError)
                     {
-                        var errorCode = Librdkafka.producev(
-                            handle,
-                            topic,
-                            partition,
-                    (IntPtr)MsgFlags.MSG_F_COPY,
-                            (IntPtr)valPtr, (UIntPtr) val.Length,
-                            (IntPtr)keyPtr, (UIntPtr) key.Length,
-                            timestamp,
-                            headersPtr,
-                            opaque);
-
-                        if (errorCode != ErrorCode.NoError)
+                        if (headersPtr != IntPtr.Zero)
                         {
-                            if (headersPtr != IntPtr.Zero)
-                            {
-                                Librdkafka.headers_destroy(headersPtr);
-                            }
+                            Librdkafka.headers_destroy(headersPtr);
                         }
-
-                        return errorCode;
                     }
+
+                    return errorCode;
                 }
                 catch
                 {

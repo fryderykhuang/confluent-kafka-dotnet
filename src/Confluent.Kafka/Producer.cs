@@ -481,13 +481,13 @@ namespace Confluent.Kafka
         }
             else
             {
-                var keyBytes = keySerializer?.Serialize(topic, message.Key);
-                var valBytes = valueSerializer?.Serialize(topic, message.Value);
+                var keyBytes = keySerializer.Serialize(topic, message.Key);
+                var valBytes = valueSerializer.Serialize(topic, message.Value);
 
                 producer.ProduceImpl(
                     topic,
-                    valBytes, 0, valBytes == null ? 0 : valBytes.Length,
-                    keyBytes, 0, keyBytes == null ? 0 : keyBytes.Length,
+                    valBytes,
+                    keyBytes,
                     message.Timestamp, Partition.Any, message.Headers, 
                     null);
 
@@ -542,13 +542,13 @@ namespace Confluent.Kafka
         }
             else
             {
-                var keyBytes = keySerializer?.Serialize(topicPartition.Topic, message.Key);
-                var valBytes = valueSerializer?.Serialize(topicPartition.Topic, message.Value);
+                var keyBytes = keySerializer.Serialize(topicPartition.Topic, message.Key);
+                var valBytes = valueSerializer.Serialize(topicPartition.Topic, message.Value);
 
                 producer.ProduceImpl(
                     topicPartition.Topic, 
-                    valBytes, 0, valBytes == null ? 0 : valBytes.Length, 
-                    keyBytes, 0, keyBytes == null ? 0 : keyBytes.Length, 
+                    valBytes,
+                    keyBytes, 
                     message.Timestamp, topicPartition.Partition, message.Headers, 
                     null);
 
