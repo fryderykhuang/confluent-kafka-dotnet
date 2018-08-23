@@ -16,7 +16,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Collections.Concurrent;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -279,6 +278,7 @@ namespace Confluent.Kafka
                                 //       and exit the polling loop. Further usage of the AdminClient will
                                 //       result in exceptions. People will be sure to notice and tell us.
                                 this.DisposeResources();
+                                break;
                             }
                         }
                     }
@@ -331,11 +331,15 @@ namespace Confluent.Kafka
         ///     Update the configuration for the specified resources. Updates are not transactional
         ///     so they may succeed for some resources while fail for others. The configs for a 
         ///     particular resource are updated atomically. This operation is supported by brokers 
-        ///     with version 0.11.0.0 or higher.
+        ///     with version 0.11.0.0 or higher. IMPORTANT NOTE: Unspecified configuration properties
+        ///     will be reverted to their default values. Furthermore, if you use DescribeConfigsAsync
+        ///     to obtain the current set of configuration values, modify them, then use 
+        ///     AlterConfigsAsync to set them, you will loose any non-default values that are marked 
+        ///     as sensitive because they are not provided by DescribeConfigsAsync.
         /// </summary>
         /// <param name="configs">
         ///     The resources with their configs (topic is the only resource type with configs
-        ///     that can be updated currently)
+        ///     that can be updated currently).
         /// </param>
         /// <param name="options">
         ///     The options to use when altering configs.
@@ -364,7 +368,7 @@ namespace Confluent.Kafka
         ///     Create a batch of new topics.
         /// </summary>
         /// <param name="topics">
-        ///     A collection of specifications of the new topics to create.
+        ///     A collection of specifications for the new topics to create.
         /// </param>
         /// <param name="options">
         ///     The options to use when creating the topics.
@@ -372,10 +376,10 @@ namespace Confluent.Kafka
         /// <returns>
         ///     The results of the create topic requests.
         /// </returns>
-        public Task<List<CreateTopicResult>> CreateTopicsAsync(IEnumerable<NewTopic> topics, CreateTopicsOptions options = null)
+        public Task<List<CreateTopicResult>> CreateTopicsAsync(IEnumerable<TopicSpecification> topics, CreateTopicsOptions options = null)
         {
             // TODO: To support results that may complete at different times, we may also want to implement:
-            // public List<Task<CreateTopicResult>> CreateTopicsConcurrent(IEnumerable<NewTopic> topics, CreateTopicsOptions options = null)
+            // public List<Task<CreateTopicResult>> CreateTopicsConcurrent(IEnumerable<TopicSpecification> topics, CreateTopicsOptions options = null)
 
             var completionSource = new TaskCompletionSource<List<CreateTopicResult>>();
             var gch = GCHandle.Alloc(completionSource);
@@ -386,11 +390,11 @@ namespace Confluent.Kafka
         }
 
         /// <summary>
-        ///     Delete a batch of topics. This operation is not transactional so it may succeed for some topics while fail
+        ///     Delete a set of topics. This operation is not transactional so it may succeed for some topics while fail
         ///     for others. It may take several seconds after the DeleteTopicsResult returns success for all the brokers to
         ///     become aware that the topics are gone. During this time, topics may continue to be visible via admin 
         ///     operations. If delete.topic.enable is false on the brokers, DeleteTopicsAsync will mark the topics for
-        ///     deletion, but not actually delete them. The futures will return successfully in this case.
+        ///     deletion, but not actually delete them. The Task will return successfully in this case.
         /// </summary>
         /// <param name="topics">
         ///     The topic names to delete.
@@ -416,27 +420,27 @@ namespace Confluent.Kafka
 
         /// <summary>
         ///     Increase the number of partitions for one or more topics as per
-        ///     the supplied NewPartitions specifications.
+        ///     the supplied PartitionsSpecifications.
         /// </summary>
-        /// <param name="newPartitions">
-        ///     A collection of NewPartitions specifications.
+        /// <param name="partitionsSpecifications">
+        ///     A collection of PartitionsSpecifications.
         /// </param>
         /// <param name="options">
         ///     The options to use when creating the partitions.
         /// </param>
         /// <returns>
-        ///     The results of the NewPartitions requests.
+        ///     The results of the PartitionsSpecification requests.
         /// </returns>
         public Task<List<CreatePartitionsResult>> CreatePartitionsAsync(
-            IEnumerable<NewPartitions> newPartitions, CreatePartitionsOptions options = null)
+            IEnumerable<PartitionsSpecification> partitionsSpecifications, CreatePartitionsOptions options = null)
         {
             // TODO: To support results that may complete at different times, we may also want to implement:
-            // List<Task<CreatePartitionResult>> CreatePartitionsConcurrent(IEnumerable<NewPartitions> newPartitions, CreatePartitionsOptions options = null)
+            // List<Task<CreatePartitionResult>> CreatePartitionsConcurrent(IEnumerable<PartitionsSpecification> partitionsSpecifications, CreatePartitionsOptions options = null)
 
             var completionSource = new TaskCompletionSource<List<CreatePartitionsResult>>();
             var gch = GCHandle.Alloc(completionSource);
             Handle.LibrdkafkaHandle.CreatePartitions(
-                newPartitions, options, resultQueue,
+                partitionsSpecifications, options, resultQueue,
                 GCHandle.ToIntPtr(gch));
             return completionSource.Task;
         }
@@ -446,11 +450,6 @@ namespace Confluent.Kafka
 
         private SafeKafkaHandle kafkaHandle
             => handle.LibrdkafkaHandle;
-
-        private ConcurrentDictionary<string, SafeTopicHandle> topicHandles
-            = new ConcurrentDictionary<string, SafeTopicHandle>(StringComparer.Ordinal);
-
-        private Func<string, SafeTopicHandle> topicHandlerFactory;
 
 
         /// <summary>
@@ -464,9 +463,12 @@ namespace Confluent.Kafka
         /// </param>
         public AdminClient(IEnumerable<KeyValuePair<string, object>> config)
         {
-            // TODO: Sort out exact behavior with poll. We don't really want to
-            // have the capability to manually poll on this class because we
-            // don't know if we're wrapping a consumer or producer.
+            if (
+                config.Where(prop => prop.Key.StartsWith("dotnet.producer.")).Count() > 0 ||
+                config.Where(prop => prop.Key.StartsWith("dotnet.consumer.")).Count() > 0)
+            {
+                throw new ArgumentException("AdminClient configuration must not include producer or consumer specific configuration properties.");
+            }
 
             this.ownedClient = new Producer(config);
             this.handle = new Handle
@@ -474,6 +476,7 @@ namespace Confluent.Kafka
                 Owner = this,
                 LibrdkafkaHandle = ownedClient.Handle.LibrdkafkaHandle
             };
+
             Init();
         }
 
@@ -494,16 +497,6 @@ namespace Confluent.Kafka
 
         private void Init()
         {
-            // note: ConcurrentDictionary.GetorAdd() method is not atomic
-            this.topicHandlerFactory = (string topicName) =>
-            {
-                // Note: there is a possible (benign) race condition here - topicHandle could have already
-                // been created for the topic (and possibly added to topicHandles). If the topicHandle has
-                // already been created, rdkafka will return it and not create another. the call to rdkafka
-                // is threadsafe.
-                return kafkaHandle.Topic(topicName, IntPtr.Zero);
-            };
-
             resultQueue = kafkaHandle.CreateQueue();
 
             callbackCts = new CancellationTokenSource();
@@ -544,25 +537,8 @@ namespace Confluent.Kafka
             => kafkaHandle.ListGroup(group, timeout.TotalMillisecondsAsInt());
 
 
-        ///  <summary>
-        ///     Get information pertaining to a particular group in the
-        ///     Kafka cluster (blocks, potentially indefinitely).
-        ///
-        ///     [API-SUBJECT-TO-CHANGE] - The API associated with this functionality is subject to change.
-        /// </summary>
-        /// <param name="group">
-        ///     The group of interest.
-        /// </param>
-        /// <returns>
-        ///     Returns information pertaining to the specified group
-        ///     or null if this group does not exist.
-        /// </returns>
-        public GroupInfo ListGroup(string group)
-            => kafkaHandle.ListGroup(group, -1);
-
-
         /// <summary>
-        ///     Get last known low (oldest available/beginning) and high (newest/end)
+        ///     Get the last cached low (oldest available/beginning) and high (newest/end)
         ///     offsets for a topic/partition.
         /// </summary>
         /// <remarks>
@@ -606,41 +582,23 @@ namespace Confluent.Kafka
             => kafkaHandle.QueryWatermarkOffsets(topicPartition.Topic, topicPartition.Partition, timeout.TotalMillisecondsAsInt());
 
 
-        /// <summary>
-        ///     Query the cluster for metadata corresponding to all topics in the cluster (blocking).
-        ///
-        ///     [API-SUBJECT-TO-CHANGE] - The API associated with this functionality is subject to change.
-        /// </summary>
-        private SafeTopicHandle getKafkaTopicHandle(string topic) 
-            => topicHandles.GetOrAdd(topic, topicHandlerFactory);
-
 
         /// <summary>
         ///     Query the cluster for metadata.
         ///
-        ///     - allTopics = true - request all topics from cluster
-        ///     - allTopics = false - request only locally known topics.
-        /// 
         ///     [API-SUBJECT-TO-CHANGE] - The API associated with this functionality is subject to change.
         /// </summary>
-        public Metadata GetMetadata(bool allTopics, TimeSpan timeout)
-            => kafkaHandle.GetMetadata(allTopics, null, timeout.TotalMillisecondsAsInt());
+        public Metadata GetMetadata(TimeSpan timeout)
+            => kafkaHandle.GetMetadata(true, null, timeout.TotalMillisecondsAsInt());
 
 
         /// <summary>
-        ///     Query the cluster for metadata (blocking).
-        ///
-        ///     - allTopics = true - request all topics from cluster
-        ///     - allTopics = false, topic = null - request only locally known topics.
-        ///     - allTopics = false, topic = valid - request specific topic
+        ///     Query the cluster for metadata for a specific topic.
         /// 
         ///     [API-SUBJECT-TO-CHANGE] - The API associated with this functionality is subject to change.
         /// </summary>
-        public Metadata GetMetadata(bool allTopics, string topic, TimeSpan timeout)
-            => kafkaHandle.GetMetadata(
-                allTopics, 
-                topic == null ? null : getKafkaTopicHandle(topic), 
-                timeout.TotalMillisecondsAsInt());
+        public Metadata GetMetadata(string topic, TimeSpan timeout)
+            => kafkaHandle.GetMetadata(false, kafkaHandle.getKafkaTopicHandle(topic), timeout.TotalMillisecondsAsInt());
 
 
         /// <summary>
@@ -699,6 +657,7 @@ namespace Confluent.Kafka
                 {
                     if (e.InnerException.GetType() != typeof(TaskCanceledException))
                     {
+                        // program execution should never get here.
                         throw e.InnerException;
                     }
                 }
@@ -716,35 +675,11 @@ namespace Confluent.Kafka
         {
             kafkaHandle.DestroyQueue(resultQueue);
 
-            foreach (var kv in topicHandles)
-            {
-                kv.Value.Dispose();
-            }
-
             if (handle.Owner == this)
             {
                 ownedClient.Dispose();
             }
         }
 
-
-        /// <summary>
-        ///     Refer to <see cref="Confluent.Kafka.IClient.OnStatistics" />
-        /// </summary>
-        public event EventHandler<string> OnStatistics
-        {
-            add { this.handle.Owner.OnStatistics += value; }
-            remove { this.handle.Owner.OnStatistics -= value; }
-        }
-
-
-        /// <summary>
-        ///     Refer to <see cref="Confluent.Kafka.IClient.OnError" />
-        /// </summary>
-        public event EventHandler<Error> OnError
-        {
-            add { this.handle.Owner.OnError += value; }
-            remove { this.handle.Owner.OnError -= value; }
-        }
     }
 }

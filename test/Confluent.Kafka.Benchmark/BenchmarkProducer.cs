@@ -44,10 +44,7 @@ namespace Confluent.Kafka.Benchmark
                 { "linger.ms", 100 }
             };
 
-            config["dotnet.producer.enable.delivery.report.headers"] = false;
-            config["dotnet.producer.enable.delivery.report.keys"] = false;
-            config["dotnet.producer.enable.delivery.report.values"] = false;
-            config["dotnet.producer.enable.delivery.report.timestamps"] = false;
+            config["dotnet.producer.delivery.report.enabled.fields"] = "none";
 
             DeliveryReport<byte[], byte[]> firstDeliveryReport = null;
 
@@ -79,7 +76,7 @@ namespace Confluent.Kafka.Benchmark
                     {
                         var autoEvent = new AutoResetEvent(false);
                         var msgCount = nMessages;
-                        Action<DeliveryReport<byte[], byte[]>> deliveryHandler = (DeliveryReport<byte[], byte[]> deliveryReport) => 
+                        Action<DeliveryReportResult<byte[], byte[]>> deliveryHandler = (DeliveryReportResult<byte[], byte[]> deliveryReport) => 
                         {
                             if (--msgCount == 0)
                             {

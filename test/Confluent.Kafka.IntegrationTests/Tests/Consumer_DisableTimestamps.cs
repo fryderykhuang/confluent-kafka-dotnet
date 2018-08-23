@@ -35,12 +35,15 @@ namespace Confluent.Kafka.IntegrationTests
         [Theory, MemberData(nameof(KafkaParameters))]
         public static void Consumer_DisableTimestamps(string bootstrapServers, string singlePartitionTopic, string partitionedTopic)
         {
+            LogToFile("start Consumer_DisableTimestamps");
+
             var consumerConfig = new Dictionary<string, object>
             {
                 { "group.id", Guid.NewGuid().ToString() },
                 { "acks", "all" },
                 { "bootstrap.servers", bootstrapServers },
-                { "dotnet.consumer.enable.timestamps", false }
+                { "dotnet.consumer.enabled.fields", "topic,headers" },
+                { "error_cb", (Action<Error>)(error => Assert.True(false, error.Reason)) }
             };
 
             var producerConfig = new Dictionary<string, object> { {"bootstrap.servers", bootstrapServers}};
@@ -60,9 +63,6 @@ namespace Confluent.Kafka.IntegrationTests
 
             using (var consumer = new Consumer<Null, string>(consumerConfig, null, new StringDeserializer(Encoding.UTF8)))
             {
-                consumer.OnError += (_, e) =>
-                    Assert.False(true);
-
                 consumer.Assign(new TopicPartitionOffset[] { new TopicPartitionOffset(singlePartitionTopic, 0, dr.Offset) });
 
                 var record = consumer.Consume(TimeSpan.FromSeconds(30));
@@ -70,9 +70,10 @@ namespace Confluent.Kafka.IntegrationTests
                 Assert.NotNull(record.Message.Headers);
                 Assert.Equal(TimestampType.NotAvailable, record.Timestamp.Type);
                 Assert.Equal(0, record.Timestamp.UnixTimestampMs);
-
-                consumer.Close();
             }
+            
+            Assert.Equal(0, Library.HandleCount);
+            LogToFile("end   Consumer_DisableTimestamps");
         }
 
     }

@@ -18,6 +18,7 @@
 
 using System;
 using System.Linq;
+using System.Threading;
 using System.Text;
 using System.Collections.Generic;
 using Confluent.Kafka.Serialization;
@@ -29,57 +30,67 @@ namespace Confluent.Kafka.IntegrationTests
     public static partial class Tests
     {
         /// <summary>
-        ///     Test getting group information for existant and non-existant
-        ///     group using the ListGroup method (on a Consumer).
+        ///     Test auto commit operates as expected when set to false (that issue #362 is resolved).
+        ///     note that 'default.topic.config' has been depreciated.
         /// </summary>
         [Theory, MemberData(nameof(KafkaParameters))]
-        public static void ListGroup(string bootstrapServers, string singlePartitionTopic, string partitionedTopic)
+        public static void Consumer_AutoCommit(string bootstrapServers, string singlePartitionTopic, string partitionedTopic)
         {
+            LogToFile("start Consumer_AutoCommit");
+
             int N = 2;
             var firstProduced = Util.ProduceMessages(bootstrapServers, singlePartitionTopic, 100, N);
 
-            var groupId = Guid.NewGuid().ToString();
             var consumerConfig = new Dictionary<string, object>
             {
-                { "group.id", groupId },
+                { "group.id", Guid.NewGuid().ToString() },
                 { "bootstrap.servers", bootstrapServers },
-                { "session.timeout.ms", 6000 }
+                { "session.timeout.ms", 6000 },
+                { "auto.commit.interval.ms", 1000 },
+                { "enable.auto.commit", false }
             };
 
             using (var consumer = new Consumer<Null, string>(consumerConfig, null, new StringDeserializer(Encoding.UTF8)))
-            using (var adminClient = new AdminClient(consumer.Handle))
             {
+                bool done = false;
+
                 consumer.OnPartitionAssignmentReceived += (_, partitions) =>
                 {
                     Assert.Single(partitions);
-                    Assert.Equal(partitions[0], firstProduced.TopicPartition);
-                    consumer.Assign(partitions.Select(p => new TopicPartitionOffset(p, firstProduced.Offset)));
+                    consumer.Assign(new TopicPartitionOffset(singlePartitionTopic, firstProduced.Partition, firstProduced.Offset));
                 };
 
                 consumer.Subscribe(singlePartitionTopic);
 
-                while (true)
+                int msgCnt = 0;
+                while (!done)
                 {
-                    var record = consumer.Consume(TimeSpan.FromMilliseconds(100));
+                    ConsumeResult<Null, string> record = consumer.Consume(TimeSpan.FromMilliseconds(100));
                     if (record.Message != null)
                     {
-                        break;
+                        msgCnt += 1;
+                    }
+                    if (record.IsPartitionEOF)
+                    {
+                        done = true;
                     }
                 }
 
-                var g = adminClient.ListGroup(groupId);
-                Assert.NotNull(g);
-                Assert.Equal(ErrorCode.NoError, g.Error.Code);
-                Assert.Equal(groupId, g.Group);
-                Assert.Equal("consumer", g.ProtocolType);
-                Assert.Single(g.Members);
+                Assert.Equal(msgCnt, N);
 
-                g = adminClient.ListGroup("non-existent-cg");
-                Assert.Null(g);
+                Thread.Sleep(TimeSpan.FromSeconds(3));
+
+                var committed = consumer.CommittedAsync(new [] { new TopicPartition(singlePartitionTopic, 0) }, TimeSpan.FromSeconds(10)).Result;
+
+                // if this was committing, would expect the committed offset to be first committed offset + N
+                // (don't need to subtract 1 since the next message to be consumed is the value that is committed).
+                Assert.NotEqual(firstProduced.Offset + N, committed[0].Offset);
 
                 consumer.Close();
             }
-        }
 
+            Assert.Equal(0, Library.HandleCount);
+            LogToFile("end   Consumer_AutoCommit");
+        }
     }
 }

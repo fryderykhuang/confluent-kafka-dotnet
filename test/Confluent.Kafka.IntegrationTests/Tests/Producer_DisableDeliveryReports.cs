@@ -33,6 +33,8 @@ namespace Confluent.Kafka.IntegrationTests
         [Theory, MemberData(nameof(KafkaParameters))]
         public static void Producer_DisableDeliveryReports(string bootstrapServers, string singlePartitionTopic, string partitionedTopic)
         {
+            LogToFile("start Producer_DisableDeliveryReports");
+
             byte[] TestKey = new byte[] { 1, 2, 3, 4 };
             byte[] TestValue = new byte[] { 5, 6, 7, 8 };
 
@@ -43,10 +45,7 @@ namespace Confluent.Kafka.IntegrationTests
                 // the below are just a few extra tests that the property is recognized (all 
                 // set to defaults). the functionality is not tested.
                 { "dotnet.producer.enable.background.poll", true },
-                { "dotnet.producer.enable.delivery.report.headers", true },
-                { "dotnet.producer.enable.delivery.report.timestamps", true },
-                { "dotnet.producer.enable.delivery.report.keys", true },
-                { "dotnet.producer.enable.delivery.report.values", true },
+                { "dotnet.producer.delivery.report.enabled.fields", "all" },
             };
 
             // If delivery reports are disabled:
@@ -56,14 +55,13 @@ namespace Confluent.Kafka.IntegrationTests
             int count = 0;
             using (var producer = new Producer<byte[], byte[]>(producerConfig, new ByteArraySerializer(), new ByteArraySerializer()))
             {
-                producer.BeginProduce(singlePartitionTopic, new Message<byte[], byte[]> { Key = TestKey, Value = TestValue }, (DeliveryReport<byte[], byte[]> dr) => count += 1);
+                producer.BeginProduce(singlePartitionTopic, new Message<byte[], byte[]> { Key = TestKey, Value = TestValue }, (DeliveryReportResult<byte[], byte[]> dr) => count += 1);
                 producer.BeginProduce(new TopicPartition(singlePartitionTopic, 0), new Message<byte[], byte[]> { Key = TestKey, Value = TestValue });
                 producer.BeginProduce(singlePartitionTopic, new Message<byte[], byte[]> { Key = TestKey, Value = TestValue });
                 producer.BeginProduce(new TopicPartition(singlePartitionTopic, 0), new Message<byte[], byte[]> { Key = TestKey, Value = TestValue });
 
                 var drTask = producer.ProduceAsync(singlePartitionTopic, new Message<byte[], byte[]> { Key = TestKey, Value = TestValue });
                 Assert.True(drTask.IsCompleted);
-                Assert.Equal(ErrorCode.NoError, drTask.Result.Error.Code);
                 Assert.Equal(Offset.Invalid, drTask.Result.Offset);
                 Assert.Equal(Partition.Any, drTask.Result.Partition);
                 Assert.Equal(singlePartitionTopic, drTask.Result.Topic);
@@ -72,7 +70,6 @@ namespace Confluent.Kafka.IntegrationTests
 
                 drTask = producer.ProduceAsync(new TopicPartition(singlePartitionTopic, 0), new Message<byte[], byte[]> { Key = TestKey, Value = TestValue });
                 Assert.True(drTask.IsCompleted);
-                Assert.Equal(ErrorCode.NoError, drTask.Result.Error.Code);
                 Assert.Equal(Offset.Invalid, drTask.Result.Offset);
                 Assert.Equal(0, (int)drTask.Result.Partition);
                 Assert.Equal(singlePartitionTopic, drTask.Result.Topic);
@@ -83,6 +80,9 @@ namespace Confluent.Kafka.IntegrationTests
             }
 
             Assert.Equal(0, count);
+
+            Assert.Equal(0, Library.HandleCount);
+            LogToFile("end   Producer_DisableDeliveryReports");
         }
     }
 }

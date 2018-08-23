@@ -56,9 +56,10 @@ namespace AvroBlogExample
                 record.Add("Message", "a test log message");
                 record.Add("Severity", new GenericEnum(logLevelSchema, "Error"));
                 producer.ProduceAsync("log-messages", new Message<Null, GenericRecord> { Value = record })
-                    .ContinueWith(dr => Console.WriteLine(dr.Result.Error.IsError 
-                        ? $"error producing message: {dr.Result.Error.Reason}"
-                        : $"produced to: {dr.Result.TopicPartitionOffset}"));
+                    .ContinueWith(task => Console.WriteLine(
+                        task.IsFaulted
+                            ? $"error producing message: {task.Exception.Message}"
+                            : $"produced to: {task.Result.TopicPartitionOffset}"));
 
                 producer.Flush(TimeSpan.FromSeconds(30));
             }
@@ -75,7 +76,7 @@ namespace AvroBlogExample
             using (var producer = new Producer<Null, MessageTypes.LogMessage>(config, null, new AvroSerializer<MessageTypes.LogMessage>()))
             {
                 producer.ProduceAsync("log-messages", 
-                    new Message<Null,MessageTypes.LogMessage> 
+                    new Message<Null, MessageTypes.LogMessage> 
                     {
                         Value = new MessageTypes.LogMessage
                         {
@@ -119,6 +120,8 @@ namespace AvroBlogExample
                         Console.WriteLine($"an error occured: {e.Error.Reason}");
                     }
                 }
+
+                consumer.Close();
             }
         }
 

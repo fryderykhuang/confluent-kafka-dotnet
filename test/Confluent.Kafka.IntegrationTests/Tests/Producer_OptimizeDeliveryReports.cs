@@ -25,24 +25,22 @@ using Confluent.Kafka.Serialization;
 namespace Confluent.Kafka.IntegrationTests
 {
     /// <summary>
-    ///     Test dotnet.producer.enable.delivery.reports == true
-    ///     results in no delivery report.
+    ///     Test where no fields are enabled in delivery report.
     /// </summary>
     public static partial class Tests
     {
         [Theory, MemberData(nameof(KafkaParameters))]
         public async static void Producer_OptimizeDeliveryReports(string bootstrapServers, string singlePartitionTopic, string partitionedTopic)
         {
+            LogToFile("start Producer_OptimizeDeliveryReports");
+
             byte[] TestKey = new byte[] { 1, 2, 3, 4 };
             byte[] TestValue = new byte[] { 5, 6, 7, 8 };
 
             var producerConfig = new Dictionary<string, object> 
             { 
                 { "bootstrap.servers", bootstrapServers },
-                { "dotnet.producer.enable.delivery.report.headers", false },
-                { "dotnet.producer.enable.delivery.report.timestamps", false },
-                { "dotnet.producer.enable.delivery.report.keys", false },
-                { "dotnet.producer.enable.delivery.report.values", false },
+                { "dotnet.producer.delivery.report.enabled.fields", "none" }
             };
 
             using (var producer = new Producer<byte[], byte[]>(producerConfig, new ByteArraySerializer(), new ByteArraySerializer()))
@@ -62,6 +60,9 @@ namespace Confluent.Kafka.IntegrationTests
                 Assert.Null(dr.Key);
                 Assert.Null(dr.Headers);
             }
+
+            Assert.Equal(0, Library.HandleCount);
+            LogToFile("end   Producer_OptimizeDeliveryReports");
         }
     }
 }

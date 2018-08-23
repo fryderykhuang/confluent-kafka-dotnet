@@ -172,7 +172,7 @@ namespace Confluent.Kafka.VerifiableClient
             }
         }
 
-        public void HandleDelivery(DeliveryReport<Null, string> record)
+        public void HandleDelivery(DeliveryReportResult<Null, string> record)
         {
             var d = new Dictionary<string, object>
             {
@@ -505,12 +505,6 @@ namespace Confluent.Kafka.VerifiableClient
                 return;
             }
 
-            if (record.Error.Code != ErrorCode.NoError)
-            {
-                Dbg($"Message error {record.Error} at {record.TopicPartitionOffset}");
-                return;
-            }
-
             if (ap.LastOffset != -1 &&
                 ap.LastOffset + 1 != record.Offset)
                 Dbg($"Message at {record.TopicPartitionOffset}, expected offset {ap.LastOffset + 1}");
@@ -612,9 +606,6 @@ namespace Confluent.Kafka.VerifiableClient
         public override void Run()
         {
             Send("startup_complete", new Dictionary<string, object>());
-
-            consumer.OnError += (_, error)
-                => Dbg($"Error: {error}");
 
             consumer.OnPartitionAssignmentReceived += (_, partitions)
                 => HandleAssign(partitions);

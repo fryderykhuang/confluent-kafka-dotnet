@@ -35,6 +35,8 @@ namespace Confluent.Kafka.IntegrationTests
         [Theory, MemberData(nameof(KafkaParameters))]
         public static void OnPartitionsAssignedNotSet(string bootstrapServers, string singlePartitionTopic, string partitionedTopic)
         {
+            LogToFile("start OnPartitionsAssignedNotSet");
+
             var consumerConfig = new Dictionary<string, object>
             {
                 { "group.id", Guid.NewGuid().ToString() },
@@ -62,6 +64,9 @@ namespace Confluent.Kafka.IntegrationTests
 
                 consumer.Close();
             }
+            
+            Assert.Equal(0, Library.HandleCount);
+            LogToFile("end   OnPartitionsAssignedNotSet");
         }
     }
 }

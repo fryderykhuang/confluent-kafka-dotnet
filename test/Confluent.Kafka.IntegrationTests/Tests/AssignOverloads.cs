@@ -33,6 +33,8 @@ namespace Confluent.Kafka.IntegrationTests
         [Theory, MemberData(nameof(KafkaParameters))]
         public static void AssignOverloads(string bootstrapServers, string singlePartitionTopic, string partitionedTopic)
         {
+            LogToFile("start AssignOverloads");
+
             var consumerConfig = new Dictionary<string, object>
             {
                 { "group.id", Guid.NewGuid().ToString() },
@@ -48,9 +50,7 @@ namespace Confluent.Kafka.IntegrationTests
             using (var producer = new Producer<Null, string>(producerConfig, null, new StringSerializer(Encoding.UTF8)))
             {
                 dr = producer.ProduceAsync(singlePartitionTopic, new Message<Null, string> { Value = testString }).Result;
-                Assert.False(dr.Error.IsError);
                 var dr2 = producer.ProduceAsync(singlePartitionTopic, new Message<Null, string> { Value = testString2 }).Result;
-                Assert.False(dr2.Error.IsError);
                 producer.Flush(TimeSpan.FromSeconds(10));
             }
 
@@ -66,9 +66,10 @@ namespace Confluent.Kafka.IntegrationTests
                 cr = consumer.Consume(TimeSpan.FromSeconds(10));
                 Assert.NotNull(cr.Message);
                 Assert.Equal(cr.Message.Value, testString2);
-
-                consumer.Close();
             }
+
+            Assert.Equal(0, Library.HandleCount);
+            LogToFile("end   AssignOverloads");
         }
 
     }

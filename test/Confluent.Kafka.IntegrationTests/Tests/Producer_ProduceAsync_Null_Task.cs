@@ -34,6 +34,8 @@ namespace Confluent.Kafka.IntegrationTests
         [Theory, MemberData(nameof(KafkaParameters))]
         public static void Producer_ProduceAsync_Null_Task(string bootstrapServers, string singlePartitionTopic, string partitionedTopic)
         {
+            LogToFile("start Producer_ProduceAsync_Null_Task");
+
             var producerConfig = new Dictionary<string, object> 
             { 
                 { "bootstrap.servers", bootstrapServers }
@@ -51,7 +53,6 @@ namespace Confluent.Kafka.IntegrationTests
             for (int i=0; i<2; ++i)
             {
                 var dr = drs[i].Result;
-                Assert.Equal(ErrorCode.NoError, dr.Error.Code);
                 Assert.True(dr.Partition == 0 || dr.Partition == 1);
                 Assert.Equal(partitionedTopic, dr.Topic);
                 Assert.True(dr.Offset >= 0);
@@ -63,6 +64,9 @@ namespace Confluent.Kafka.IntegrationTests
             }
 
             Assert.Equal((Partition)0, drs[0].Result.Partition);
+            
+            Assert.Equal(0, Library.HandleCount);
+            LogToFile("end   Producer_ProduceAsync_Null_Task");
         }
 
     }

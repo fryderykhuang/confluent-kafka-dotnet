@@ -34,6 +34,8 @@ namespace Confluent.Kafka.IntegrationTests
         [Theory, MemberData(nameof(KafkaParameters))]
         public static void Consumer_Pause_Resume(string bootstrapServers, string singlePartitionTopic, string partitionedTopic)
         {
+            LogToFile("start Consumer_Pause_Resume");
+
             var consumerConfig = new Dictionary<string, object>
             {
                 { "group.id", Guid.NewGuid().ToString() },
@@ -64,7 +66,7 @@ namespace Confluent.Kafka.IntegrationTests
                 record = consumer.Consume(TimeSpan.FromSeconds(1));
                 Assert.Null(record.Message);
 
-                Assert.False(producer.ProduceAsync(singlePartitionTopic, new Message<Null, string> { Value = "test value" }).Result.Error.IsError);
+                producer.ProduceAsync(singlePartitionTopic, new Message<Null, string> { Value = "test value" }).Wait();
                 record = consumer.Consume(TimeSpan.FromSeconds(30));
                 Assert.NotNull(record.Message);
 
@@ -82,6 +84,9 @@ namespace Confluent.Kafka.IntegrationTests
 
                 consumer.Close();
             }
+
+            Assert.Equal(0, Library.HandleCount);
+            LogToFile("end   Consumer_Pause_Resume");
         }
 
     }

@@ -112,5 +112,20 @@ namespace Confluent.Kafka
         public static bool Load(string path)
             => Librdkafka.Initialize(path);
 
+        private static object instanceCountLockObj = new object();
+        private static int kafkaHandleCreateCount = 0;
+        private static int kafkaHandleDestroyCount = 0;
+
+        internal static void IncrementKafkaHandleCreateCount() { lock (instanceCountLockObj) { kafkaHandleCreateCount += 1; } }
+        internal static void IncrementKafkaHandleDestroyCount() { lock (instanceCountLockObj) { kafkaHandleDestroyCount += 1; } }
+
+        /// <summary>
+        ///     The total number librdkafka client instances that have been
+        ///     created and not yet disposed.
+        /// </summary>
+        public static int HandleCount
+        {
+            get { lock(instanceCountLockObj) { return kafkaHandleCreateCount - kafkaHandleDestroyCount; } }
+        }
     }
 }

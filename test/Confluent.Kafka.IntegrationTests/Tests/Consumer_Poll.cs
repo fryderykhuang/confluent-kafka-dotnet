@@ -34,6 +34,8 @@ namespace Confluent.Kafka.IntegrationTests
         [Theory, MemberData(nameof(KafkaParameters))]
         public static void Consumer_Poll(string bootstrapServers, string singlePartitionTopic, string partitionedTopic)
         {
+            LogToFile("start Consumer_Poll");
+
             int N = 2;
             var firstProduced = Util.ProduceMessages(bootstrapServers, singlePartitionTopic, 100, N);
 
@@ -66,7 +68,6 @@ namespace Confluent.Kafka.IntegrationTests
                     var record = consumer.Consume(TimeSpan.FromMilliseconds(100));
                     if (record.Message != null)
                     {
-                        Assert.Equal(ErrorCode.NoError, record.Error.Code);
                         Assert.Equal(TimestampType.CreateTime, record.Message.Timestamp.Type);
                         Assert.True(Math.Abs((DateTime.UtcNow - record.Message.Timestamp.UtcDateTime).TotalMinutes) < 1.0);
                         msgCnt += 1;
@@ -81,6 +82,9 @@ namespace Confluent.Kafka.IntegrationTests
 
                 consumer.Close();
             }
+
+            Assert.Equal(0, Library.HandleCount);
+            LogToFile("end   Consumer_Poll");
         }
 
     }

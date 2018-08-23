@@ -34,13 +34,15 @@ namespace Confluent.Kafka.IntegrationTests
         [Theory, MemberData(nameof(KafkaParameters))]
         public static void Producer_Produce_DeliveryHandler(string bootstrapServers, string singlePartitionTopic, string partitionedTopic)
         {
+            LogToFile("start Producer_Produce_DeliveryHandler");
+
             var producerConfig = new Dictionary<string, object> 
             { 
                 { "bootstrap.servers", bootstrapServers }
             };
 
             int count = 0;
-            Action<DeliveryReport<string, string>> dh = (DeliveryReport<string, string> dr) =>
+            Action<DeliveryReportResult<string, string>> dh = (DeliveryReportResult<string, string> dr) =>
             {
                 Assert.Equal(ErrorCode.NoError, dr.Error.Code);
                 Assert.Equal((Partition)0, dr.Partition);
@@ -64,6 +66,9 @@ namespace Confluent.Kafka.IntegrationTests
             }
 
             Assert.Equal(2, count);
+
+            Assert.Equal(0, Library.HandleCount);
+            LogToFile("end   Producer_Produce_DeliveryHandler");
         }
     }
 }

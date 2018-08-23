@@ -32,11 +32,13 @@ namespace Confluent.Kafka.IntegrationTests
         [Theory, MemberData(nameof(KafkaParameters))]
         public static void Metadata(string bootstrapServers, string singlePartitionTopic, string partitionedTopic)
         {
+            LogToFile("start Metadata");
+
             var config = new Dictionary<string, object> { { "bootstrap.servers", bootstrapServers } };
 
             using (var producer = new AdminClient(config))
             {
-                var metadata = producer.GetMetadata(true, null, TimeSpan.FromSeconds(10));
+                var metadata = producer.GetMetadata(TimeSpan.FromSeconds(10));
                 Assert.NotNull(metadata.Brokers);
                 Assert.True(metadata.Brokers.Count > 0);
 
@@ -82,6 +84,9 @@ namespace Confluent.Kafka.IntegrationTests
                     Assert.Equal(metadata.Brokers[i].Port, brokers[i].Value<int>("Port"));
                 }
             }
+
+            Assert.Equal(0, Library.HandleCount);
+            LogToFile("end   Metadata");
         }
     }
 }

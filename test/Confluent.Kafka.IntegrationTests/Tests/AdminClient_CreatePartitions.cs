@@ -37,6 +37,8 @@ namespace Confluent.Kafka.IntegrationTests
         [Theory, MemberData(nameof(KafkaParameters))]
         public static void AdminClient_CreatePartitions(string bootstrapServers, string singlePartitionTopic, string partitionedTopic)
         {
+            LogToFile("start AdminClient_CreatePartitions");
+
             var topicName1 = Guid.NewGuid().ToString();
             var topicName2 = Guid.NewGuid().ToString();
             var topicName3 = Guid.NewGuid().ToString();
@@ -48,19 +50,17 @@ namespace Confluent.Kafka.IntegrationTests
             using (var producer = new Producer<Null, Null>(new Dictionary<string, object> { { "bootstrap.servers", bootstrapServers } }, null, null))
             using (var adminClient = new AdminClient(producer.Handle))
             {
-                var cResult = adminClient.CreateTopicsAsync(new NewTopic[] { new NewTopic { Name = topicName1, NumPartitions = 1, ReplicationFactor = 1 } }).Result;
+                var cResult = adminClient.CreateTopicsAsync(new TopicSpecification[] { new TopicSpecification { Name = topicName1, NumPartitions = 1, ReplicationFactor = 1 } }).Result;
                 Assert.Single(cResult);
                 Assert.False(cResult.First().Error.IsError);
                 
-                var cpResult = adminClient.CreatePartitionsAsync(new List<NewPartitions> { new NewPartitions { Topic = topicName1, IncreaseTo = 2 } }).Result;
+                var cpResult = adminClient.CreatePartitionsAsync(new List<PartitionsSpecification> { new PartitionsSpecification { Topic = topicName1, IncreaseTo = 2 } }).Result;
                 Assert.Single(cpResult);
                 Assert.False(cpResult.First().Error.IsError);
                 Assert.Equal(topicName1, cpResult.First().Topic);
 
                 var dr1 = producer.ProduceAsync(new TopicPartition(topicName1, 0), new Message<Null, Null> {}).Result;
                 var dr2 = producer.ProduceAsync(new TopicPartition(topicName1, 1), new Message<Null, Null> {}).Result;
-                Assert.False(dr1.Error.IsError);
-                Assert.False(dr2.Error.IsError);
                 
                 try
                 {
@@ -77,12 +77,11 @@ namespace Confluent.Kafka.IntegrationTests
             using (var producer = new Producer<Null, Null>(new Dictionary<string, object> { { "bootstrap.servers", bootstrapServers } }, null, null))
             using (var adminClient = new AdminClient(producer.Handle))
             {
-                adminClient.CreateTopicsAsync(new NewTopic[] { new NewTopic { Name = topicName2, NumPartitions = 1, ReplicationFactor = 1 } }).Wait();
-                var cpResult = adminClient.CreatePartitionsAsync(new List<NewPartitions> { new NewPartitions { Topic = topicName2, IncreaseTo = 10 } }, new CreatePartitionsOptions { ValidateOnly = true }).Result;
+                adminClient.CreateTopicsAsync(new TopicSpecification[] { new TopicSpecification { Name = topicName2, NumPartitions = 1, ReplicationFactor = 1 } }).Wait();
+                var cpResult = adminClient.CreatePartitionsAsync(new List<PartitionsSpecification> { new PartitionsSpecification { Topic = topicName2, IncreaseTo = 10 } }, new CreatePartitionsOptions { ValidateOnly = true }).Result;
 
                 // forces a metadata request.
                 var dr1 = producer.ProduceAsync(new TopicPartition(topicName2, 0), new Message<Null, Null> {}).Result;
-                Assert.False(dr1.Error.IsError);
                 try
                 {
                     // since we have metadata, this throws immediately (i.e. not wrapped in AggregateException)
@@ -99,11 +98,11 @@ namespace Confluent.Kafka.IntegrationTests
             using (var producer = new Producer<Null, Null>(new Dictionary<string, object> { { "bootstrap.servers", bootstrapServers } }, null, null))
             using (var adminClient = new AdminClient(producer.Handle))
             {
-                adminClient.CreateTopicsAsync(new NewTopic[] { new NewTopic { Name = topicName3, NumPartitions = 1, ReplicationFactor = 1 } }).Wait();
+                adminClient.CreateTopicsAsync(new TopicSpecification[] { new TopicSpecification { Name = topicName3, NumPartitions = 1, ReplicationFactor = 1 } }).Wait();
                 var cpResult = adminClient.CreatePartitionsAsync(
-                    new List<NewPartitions> 
+                    new List<PartitionsSpecification> 
                     {
-                        new NewPartitions { Topic = topicName2, IncreaseTo = 2, Assignments = new List<List<int>> { new List<int> { 0 } } } 
+                        new PartitionsSpecification { Topic = topicName2, IncreaseTo = 2, Assignments = new List<List<int>> { new List<int> { 0 } } } 
                     }, 
                     new CreatePartitionsOptions { ValidateOnly = true }
                 ).Result;
@@ -116,14 +115,14 @@ namespace Confluent.Kafka.IntegrationTests
             using (var producer = new Producer<Null, Null>(new Dictionary<string, object> { { "bootstrap.servers", bootstrapServers } }, null, null))
             using (var adminClient = new AdminClient(producer.Handle))
             {
-                adminClient.CreateTopicsAsync(new NewTopic[] { new NewTopic { Name = topicName4, NumPartitions = 1, ReplicationFactor = 1 } }).Wait();
+                adminClient.CreateTopicsAsync(new TopicSpecification[] { new TopicSpecification { Name = topicName4, NumPartitions = 1, ReplicationFactor = 1 } }).Wait();
 
                 try
                 {
                     var cpResult = adminClient.CreatePartitionsAsync(
-                        new List<NewPartitions> 
+                        new List<PartitionsSpecification> 
                         {
-                            new NewPartitions { Topic = topicName2, IncreaseTo = 2, Assignments = new List<List<int>> { new List<int> { 42 } } } 
+                            new PartitionsSpecification { Topic = topicName2, IncreaseTo = 2, Assignments = new List<List<int>> { new List<int> { 42 } } } 
                         }, 
                         new CreatePartitionsOptions { ValidateOnly = true }
                     ).Result;
@@ -141,23 +140,26 @@ namespace Confluent.Kafka.IntegrationTests
             // more than one.
             using (var adminClient = new AdminClient(new Dictionary<string, object> { { "bootstrap.servers", bootstrapServers } }))
             {
-                adminClient.CreateTopicsAsync(new NewTopic[] 
+                adminClient.CreateTopicsAsync(new TopicSpecification[] 
                     { 
-                        new NewTopic { Name = topicName5, NumPartitions = 1, ReplicationFactor = 1 },
-                        new NewTopic { Name = topicName6, NumPartitions = 1, ReplicationFactor = 1 }
+                        new TopicSpecification { Name = topicName5, NumPartitions = 1, ReplicationFactor = 1 },
+                        new TopicSpecification { Name = topicName6, NumPartitions = 1, ReplicationFactor = 1 }
                     }
                 ).Wait();
+                Thread.Sleep(TimeSpan.FromSeconds(1));
 
                 // just a simple check there wasn't an exception.
                 adminClient.CreatePartitionsAsync(
-                    new List<NewPartitions> 
+                    new List<PartitionsSpecification> 
                     {
-                        new NewPartitions { Topic = topicName5, IncreaseTo = 2 },
-                        new NewPartitions { Topic = topicName6, IncreaseTo = 3 }
+                        new PartitionsSpecification { Topic = topicName5, IncreaseTo = 2 },
+                        new PartitionsSpecification { Topic = topicName6, IncreaseTo = 3 }
                     }
                 ).Wait();
             }
 
+            Assert.Equal(0, Library.HandleCount);
+            LogToFile("end   AdminClient_CreatePartitions");
         }
     }
 }

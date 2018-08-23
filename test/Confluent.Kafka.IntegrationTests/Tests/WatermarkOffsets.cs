@@ -34,6 +34,8 @@ namespace Confluent.Kafka.IntegrationTests
         [Theory, MemberData(nameof(KafkaParameters))]
         public static void WatermarkOffsets(string bootstrapServers, string singlePartitionTopic, string partitionedTopic)
         {
+            LogToFile("start WatermarkOffsets");
+
             var producerConfig = new Dictionary<string, object>
             {
                 { "bootstrap.servers", bootstrapServers }
@@ -46,7 +48,7 @@ namespace Confluent.Kafka.IntegrationTests
             using (var adminClient = new AdminClient(producer.Handle))
             {
                 dr = producer.ProduceAsync(singlePartitionTopic, new Message<Null, string> { Value = testString }).Result;
-                producer.Flush(TimeSpan.FromSeconds(10));
+                Assert.Equal(0, producer.Flush(TimeSpan.FromSeconds(10))); // this isn't necessary.
 
                 var queryOffsets = adminClient.QueryWatermarkOffsets(new TopicPartition(singlePartitionTopic, 0), TimeSpan.FromSeconds(20));
                 Assert.NotEqual(queryOffsets.Low, Offset.Invalid);
@@ -82,9 +84,10 @@ namespace Confluent.Kafka.IntegrationTests
                 var queryOffsets = adminClient.QueryWatermarkOffsets(dr.TopicPartition, TimeSpan.FromSeconds(20));
                 Assert.NotEqual(queryOffsets.Low, Offset.Invalid);
                 Assert.Equal(getOffsets.High, queryOffsets.High);
-
-                consumer.Close();
             }
+
+            Assert.Equal(0, Library.HandleCount);
+            LogToFile("end   WatermarkOffsets");
         }
 
     }

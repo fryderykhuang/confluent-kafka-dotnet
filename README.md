@@ -42,16 +42,18 @@ confluent-kafka-dotnet is distributed via NuGet. We provide three packages:
 To install Confluent.Kafka from within Visual Studio, search for Confluent.Kafka in the NuGet Package Manager UI, or run the following command in the Package Manager Console:
 
 ```
-Install-Package Confluent.Kafka -Version 1.0-experimental-6
+Install-Package Confluent.Kafka -Version 1.0-experimental-10
 ```
 
 To add a reference to a dotnet core project, execute the following at the command line:
 
 ```
-dotnet add package -v 1.0-experimental-6 Confluent.Kafka
+dotnet add package -v 1.0-experimental-10 Confluent.Kafka
 ```
 
-Nuget packages corresponding to commits to release branches are available from the following nuget package source (Note: this is not a web url - you 
+We recommend using 1.0 pre-release versions of Confluent.Kafka for new projects in preference to the most recent stable release (0.11.5). The 1.0 API provides more features, is considerably improved and is more performant than 0.11.x releases. Be warned that we may still make breaking API changes before the 1.0 release but the API is now close to it's final form. We are not depreciating 0.11.x releases immediately. In addition to 1.x releases, we will continue with 0.11.x maintenance releases going forward.
+
+Nuget packages corresponding to commits to release branches are available from the following nuget package source (Note: this is not a web URL - you 
 should specify it in the nuget package manger):
 [https://ci.appveyor.com/nuget/confluent-kafka-dotnet](https://ci.appveyor.com/nuget/confluent-kafka-dotnet). The version suffix of these nuget packages 
 matches the appveyor build number. You can see which commit a particular build number corresponds to by looking at the 
@@ -134,10 +136,14 @@ public class Program
 }
 ```
 
-### AvroGen tool
+### Working with Apache Avro
 
-The Avro serializer and deserializer provided by `Confluent.Kafka.Avro` can be used with the `GenericRecord` class
-or with specific classes generated using the `avrogen` tool, available via Nuget (.NET Core 2.1 required):
+The `Confluent.Kafka.Avro` nuget package provides an Avro serializer and deserializer that integrate with [Confluent
+Schema Registry](https://docs.confluent.io/current/schema-registry/docs/index.html). The `Confluent.SchemaRegistry` 
+nuget package provides a client for interfacing with Schema Registry's REST API.
+
+You can use the Avro serializer and deserializer with the `GenericRecord` class or with specific classes generated
+using the `avrogen` tool, available via Nuget (.NET Core 2.1 required):
 
 ```
 dotnet tool install -g Confluent.Apache.Avro.AvroGen
@@ -149,6 +155,9 @@ Usage:
 avrogen -s your_schema.asvc .
 ```
 
+For more information about working with Avro in .NET, refer to the the blog post [Decoupling Systems with Apache Kafka, Schema Registry and Avro](https://www.confluent.io/blog/decoupling-systems-with-apache-kafka-schema-registry-and-avro/)
+
+
 ### Confluent Cloud
 
 The [Confluent Cloud example](examples/ConfluentCloud) demonstrates how to configure the .NET client for use with [Confluent Cloud](https://www.confluent.io/confluent-cloud/).
@@ -156,7 +165,7 @@ The [Confluent Cloud example](examples/ConfluentCloud) demonstrates how to confi
 
 ### Known Issues
 
-The mechanism used by librdkafka to poll simultaneously for both new application and socket events is not supported on Windows. If you are on Windows and experiencing poor latency (which may happen in low throughput scenarios in particular), set `socket.blocking.max.ms` to `1` to limit the time librdkafka will block waiting for network events to 1ms (the trade-off being higher CPU usage). We will optimize the librdkafka control loop for use on Windows in a future version of the library.
+The mechanism used by librdkafka to poll simultaneously for both new application and socket events is not supported on Windows. If you are on Windows and experiencing poor latency (which may happen in low throughput scenarios in particular), as a workaround, set `socket.blocking.max.ms` to `1` to limit the time librdkafka will block waiting for network events to 1ms (the trade-off being higher CPU usage). We will optimize the librdkafka control loop for use on Windows in a future version of the library.
 
 
 ## Build

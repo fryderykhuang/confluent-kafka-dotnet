@@ -141,26 +141,6 @@ namespace Confluent.Kafka
             => this.handle.Owner.Name;
 
 
-        /// <summary>
-        ///     Refer to <see cref="Confluent.Kafka.IClient.OnStatistics" />
-        /// </summary>
-        public event EventHandler<string> OnStatistics
-        {
-            add { this.handle.Owner.OnStatistics += value; }
-            remove { this.handle.Owner.OnStatistics -= value; }
-        }
-
-
-        /// <summary>
-        ///     Refer to <see cref="Confluent.Kafka.IClient.OnError" />
-        /// </summary>
-        public event EventHandler<Error> OnError
-        {
-            add { this.handle.Owner.OnError += value; }
-            remove { this.handle.Owner.OnError -= value; }
-        }
-
-
         internal int Flush(int millisecondsTimeout)
             => ((Producer)this.handle.Owner).Flush(millisecondsTimeout);
 
@@ -338,7 +318,7 @@ namespace Confluent.Kafka
 
             public TValue Value;
 
-            public void HandleDeliveryReport(DeliveryReport deliveryReport)
+            public void HandleDeliveryReport(Producer.UntypedDeliveryReport deliveryReport)
             {
                 if (deliveryReport == null)
                 {
@@ -352,7 +332,7 @@ namespace Confluent.Kafka
 
                 var dr = new DeliveryReport<TKey, TValue>
                 {
-                    TopicPartitionOffsetError = deliveryReport.TopicPartitionOffsetError,
+                    TopicPartitionOffset = deliveryReport.TopicPartitionOffset,
                     Message = new Message<TKey, TValue>
                     {
                         Key = Key,
@@ -366,18 +346,18 @@ namespace Confluent.Kafka
                 dr.Topic = Topic;
 
 #if NET45
-                if (dr.Error.IsError)
+                if (deliveryReport.Error.IsError)
                 {
-                    System.Threading.Tasks.Task.Run(() => SetException(new ProduceMessageException<TKey, TValue>(dr.Error, dr)));
+                    System.Threading.Tasks.Task.Run(() => SetException(new ProduceException<TKey, TValue>(deliveryReport.Error, dr)));
                 }
                 else
                 {
                     System.Threading.Tasks.Task.Run(() => TrySetResult(dr));
                 }
 #else
-                if (dr.Error.IsError)
+                if (deliveryReport.Error.IsError)
                 {
-                    TrySetException(new ProduceMessageException<TKey, TValue>(dr.Error, dr));
+                    TrySetException(new ProduceException<TKey, TValue>(deliveryReport.Error, dr));
                 }
                 else
                 {
@@ -390,7 +370,7 @@ namespace Confluent.Kafka
 
         private class TypedDeliveryHandlerShim_Action : IDeliveryHandler
         {
-            public TypedDeliveryHandlerShim_Action(string topic, TKey key, TValue val, Action<DeliveryReport<TKey, TValue>> handler)
+            public TypedDeliveryHandlerShim_Action(string topic, TKey key, TValue val, Action<DeliveryReportResult<TKey, TValue>> handler)
             {
                 Topic = topic;
                 Key = key;
@@ -404,16 +384,16 @@ namespace Confluent.Kafka
 
             public TValue Value;
 
-            public Action<DeliveryReport<TKey, TValue>> Handler;
+            public Action<DeliveryReportResult<TKey, TValue>> Handler;
 
-            public void HandleDeliveryReport(DeliveryReport deliveryReport)
+            public void HandleDeliveryReport(Producer.UntypedDeliveryReport deliveryReport)
             {
                 if (deliveryReport == null)
                 {
                     return;
                 }
 
-                var dr = new DeliveryReport<TKey, TValue>
+                var dr = new DeliveryReportResult<TKey, TValue>
                 {
                     TopicPartitionOffsetError = deliveryReport.TopicPartitionOffsetError,
                     Message = new Message<TKey, TValue> 
@@ -493,7 +473,7 @@ namespace Confluent.Kafka
 
                 var result = new DeliveryReport<TKey, TValue>
                 {
-                    TopicPartitionOffsetError = new TopicPartitionOffsetError(new TopicPartition(topic, Partition.Any), Offset.Invalid, new Error(ErrorCode.NoError)),
+                    TopicPartitionOffset = new TopicPartitionOffset(new TopicPartition(topic, Partition.Any), Offset.Invalid),
                     Message = message
                 };
 
@@ -554,7 +534,7 @@ namespace Confluent.Kafka
 
                 var result = new DeliveryReport<TKey, TValue>
                 {
-                    TopicPartitionOffsetError = new TopicPartitionOffsetError(topicPartition, Offset.Invalid, new Error(ErrorCode.NoError)),
+                    TopicPartitionOffset = new TopicPartitionOffset(topicPartition, Offset.Invalid),
                     Message = message
                 };
 
@@ -576,7 +556,7 @@ namespace Confluent.Kafka
         ///     A delegate that will be called with a delivery report corresponding
         ///     to the produce request (if enabled).
         /// </param>
-        public void BeginProduce(TopicPartition topicPartition, Message<TKey, TValue> message, Action<DeliveryReport<TKey, TValue>> deliveryHandler = null)
+        public void BeginProduce(TopicPartition topicPartition, Message<TKey, TValue> message, Action<DeliveryReportResult<TKey, TValue>> deliveryHandler = null)
         {
             var keyBytes = keySerializer.Serialize(topicPartition.Topic, message.Key);
             var valBytes = valueSerializer.Serialize(topicPartition.Topic, message.Value);
@@ -612,7 +592,7 @@ namespace Confluent.Kafka
         ///     A delegate that will be called with a delivery report corresponding
         ///     to the produce request (if enabled).
         /// </param>
-        public void BeginProduce(string topic, Message<TKey, TValue> message, Action<DeliveryReport<TKey, TValue>> deliveryHandler = null)
+        public void BeginProduce(string topic, Message<TKey, TValue> message, Action<DeliveryReportResult<TKey, TValue>> deliveryHandler = null)
         {
             var keyBytes = keySerializer.Serialize(topic, message.Key);
             var valBytes = valueSerializer.Serialize(topic, message.Value);
@@ -639,6 +619,67 @@ namespace Confluent.Kafka
     /// </summary>
     internal class Producer : IClient
     {
+        internal class UntypedDeliveryReport
+        {
+            /// <summary>
+            ///     The topic associated with the message.
+            /// </summary>
+            public string Topic { get; set; }
+
+            /// <summary>
+            ///     The partition associated with the message.
+            /// </summary>
+            public Partition Partition { get; set; } = Partition.Any;
+
+            /// <summary>
+            ///     The partition offset associated with the message.
+            /// </summary>
+            public Offset Offset { get; set; } = Offset.Invalid;
+
+            /// <summary>
+            ///     An error (or NoError) associated with the message.
+            /// </summary>
+            public Error Error { get; set; }
+
+            /// <summary>
+            ///     The TopicPartition associated with the message.
+            /// </summary>
+            public TopicPartition TopicPartition
+                => new TopicPartition(Topic, Partition);
+
+            /// <summary>
+            ///     The TopicPartitionOffset associated with the message.
+            /// </summary>
+            public TopicPartitionOffset TopicPartitionOffset
+                => new TopicPartitionOffset(Topic, Partition, Offset);
+
+            /// <summary>
+            ///     The TopicPartitionOffsetError assoicated with the message.
+            /// </summary>
+            public TopicPartitionOffsetError TopicPartitionOffsetError
+            {
+                get
+                {
+                    return new TopicPartitionOffsetError(Topic, Partition, Offset, Error);
+                }
+                set
+                {
+                    Topic = value.Topic;
+                    Partition = value.Partition;
+                    Offset = value.Offset;
+                    Error = value.Error;
+                }
+            }
+
+            /// <summary>
+            ///     The message that was produced.
+            /// </summary>
+            public Message Message { get; set; }
+        }
+        
+        private bool disposeHasBeenCalled = false;
+        private object disposeHasBeenCalledLockObj = new object();
+
         private readonly bool manualPoll = false;
         internal readonly bool enableDeliveryReports = true;
         internal readonly bool enableDeliveryReportHeaders = true;
@@ -666,41 +707,59 @@ namespace Confluent.Kafka
                     catch (OperationCanceledException) {}
                 }, ct, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
-        private readonly Librdkafka.ErrorDelegate errorDelegate;
+
+        private Action<Error> errorDelegate = null;
+        private readonly Librdkafka.ErrorDelegate errorCallbackDelegate;
         private void ErrorCallback(IntPtr rk, ErrorCode err, string reason, IntPtr opaque)
         {
-            if (kafkaHandle.IsDestroyed) { return; }
-            OnError?.Invoke(this, new Error(err, reason));
+            // Ensure registered handlers are never called as a side-effect of Dispose/Finalize (prevents deadlocks in common scenarios).
+            if (kafkaHandle.IsClosed) { return; }
+            
+            if (errorDelegate != null)
+            {
+                errorDelegate(new Error(err, reason));
+            }
         }
 
-        private readonly Librdkafka.StatsDelegate statsDelegate;
+
+        private Action<string> statsDelegate = null;
+        private readonly Librdkafka.StatsDelegate statsCallbackDelegate;
         private int StatsCallback(IntPtr rk, IntPtr json, UIntPtr json_len, IntPtr opaque)
         {
-            if (kafkaHandle.IsDestroyed) { return 0; }
+            // Ensure registered handlers are never called as a side-effect of Dispose/Finalize (prevents deadlocks in common scenarios).
+            if (kafkaHandle.IsClosed) { return 0; }
 
-            OnStatistics?.Invoke(this, Util.Marshal.PtrToStringUTF8(json));
+            if (statsDelegate != null)
+            {
+                statsDelegate(Util.Marshal.PtrToStringUTF8(json));
+            }
+
             return 0; // instruct librdkafka to immediately free the json ptr.
         }
 
-        Action<LogMessage> logDelegate;
+
+        private object loggerLockObj = new object();
+        Action<LogMessage> logDelegate = null;
         private readonly Librdkafka.LogDelegate logCallbackDelegate;
         private void LogCallback(IntPtr rk, SyslogLevel level, string fac, string buf)
         {
-            // the log delegate should never make use of the client instance, so the
-            // following is not necessary. also, the callback may also be called when
-            // kafkaHandle is null.
-            // if (kafkaHandle.IsDestroyed) { return; }
+            // Ensure registered handlers are never called as a side-effect of Dispose/Finalize (prevents deadlocks in common scenarios).
+            // Note: kafkaHandle can be null if the callback is during construction (in that case, we want the delegate to run).
+            if (kafkaHandle != null && kafkaHandle.IsClosed) { return; }
 
             var name = Util.Marshal.PtrToStringUTF8(Librdkafka.name(rk));
 
-            if (logDelegate == null)
+            lock (loggerLockObj)
             {
-                // Log to stderr by default if no logger is specified.
-                Loggers.ConsoleLogger(this, new LogMessage(name, level, fac, buf));
-                return;
-            }
+                if (logDelegate == null)
+                {
+                    // Log to stderr by default if no logger is specified.
+                    Loggers.ConsoleLogger(this, new LogMessage(name, level, fac, buf));
+                    return;
+                }
 
-            logDelegate(new LogMessage(name, level, fac, buf));
+                logDelegate(new LogMessage(name, level, fac, buf));
+            }
         }
 
         private Librdkafka.DeliveryReportDelegate DeliveryReportCallback;
@@ -711,7 +770,8 @@ namespace Confluent.Kafka
         /// </remarks>
         private void DeliveryReportCallbackImpl(IntPtr rk, IntPtr rkmessage, IntPtr opaque)
         {
-            if (kafkaHandle.IsDestroyed) { return; }
+            // Ensure registered handlers are never called as a side-effect of Dispose/Finalize (prevents deadlocks in common scenarios).
+            if (kafkaHandle.IsClosed) { return; }
 
             var msg = Util.Marshal.PtrToStructureUnsafe<rd_kafka_message>(rkmessage);
 
@@ -759,7 +819,7 @@ namespace Confluent.Kafka
             }
 
             deliveryHandler.HandleDeliveryReport(
-                new DeliveryReport 
+                new UntypedDeliveryReport 
                 {
                     // Topic is not set here in order to avoid the marshalling cost.
                     // Instead, the delivery handler is expected to cache the topic string.
@@ -850,11 +910,10 @@ namespace Confluent.Kafka
                 .Where(prop => 
                     prop.Key != ConfigPropertyNames.EnableBackgroundPollPropertyName &&
                     prop.Key != ConfigPropertyNames.EnableDeliveryReportsPropertyName &&
-                    prop.Key != ConfigPropertyNames.EnableDeliveryReportHeadersName &&
-                    prop.Key != ConfigPropertyNames.EnableDeliveryReportKeyName &&
-                    prop.Key != ConfigPropertyNames.EnableDeliveryReportValueName &&
-                    prop.Key != ConfigPropertyNames.EnableDeliveryReportTimestampName &&
-                    prop.Key != ConfigPropertyNames.LogDelegateName);
+                    prop.Key != ConfigPropertyNames.DeliveryReportEnabledFieldsPropertyName &&
+                    prop.Key != ConfigPropertyNames.LogDelegateName &&
+                    prop.Key != ConfigPropertyNames.ErrorDelegateName &&
+                    prop.Key != ConfigPropertyNames.StatsDelegateName);
 
             if (modifiedConfig.Where(obj => obj.Key == "delivery.report.only.error").Count() > 0)
             {
@@ -877,28 +936,33 @@ namespace Confluent.Kafka
                 this.enableDeliveryReports = bool.Parse(enableDeliveryReportsObj.ToString());
             }
 
-            var enableDeliveryReportHeadersObj = config.FirstOrDefault(prop => prop.Key == ConfigPropertyNames.EnableDeliveryReportHeadersName).Value;
-            if (enableDeliveryReportHeadersObj != null)
+            var deliveryReportEnabledFieldsObj = config.FirstOrDefault(prop => prop.Key == ConfigPropertyNames.DeliveryReportEnabledFieldsPropertyName).Value;
+            if (deliveryReportEnabledFieldsObj != null)
             {
-                this.enableDeliveryReportHeaders = bool.Parse(enableDeliveryReportHeadersObj.ToString());
-            }
-
-            var enableDeliveryReportKeyObj = config.FirstOrDefault(prop => prop.Key == ConfigPropertyNames.EnableDeliveryReportKeyName).Value;
-            if (enableDeliveryReportKeyObj != null)
-            {
-                this.enableDeliveryReportKey = bool.Parse(enableDeliveryReportKeyObj.ToString());
-            }
-
-            var enableDeliveryReportValueObj = config.FirstOrDefault(prop => prop.Key == ConfigPropertyNames.EnableDeliveryReportValueName).Value;
-            if (enableDeliveryReportValueObj != null)
-            {
-                this.enableDeliveryReportValue = bool.Parse(enableDeliveryReportValueObj.ToString());
-            }
-
-            var enableDeliveryReportTimestampObj = config.FirstOrDefault(prop => prop.Key == ConfigPropertyNames.EnableDeliveryReportTimestampName).Value;
-            if (enableDeliveryReportTimestampObj != null)
-            {
-                this.enableDeliveryReportTimestamp = bool.Parse(enableDeliveryReportTimestampObj.ToString());
+                var fields = deliveryReportEnabledFieldsObj.ToString().Replace(" ", "");
+                if (fields != "all")
+                {
+                    this.enableDeliveryReportKey = false;
+                    this.enableDeliveryReportValue = false;
+                    this.enableDeliveryReportHeaders = false;
+                    this.enableDeliveryReportTimestamp = false;
+                    if (fields != "none")
+                    {
+                        var parts = fields.Split(',');
+                        foreach (var part in parts)
+                        {
+                            switch (part)
+                            {
+                                case "key": this.enableDeliveryReportKey = true; break;
+                                case "value": this.enableDeliveryReportValue = true; break;
+                                case "timestamp": this.enableDeliveryReportTimestamp = true; break;
+                                case "headers": this.enableDeliveryReportHeaders = true; break;
+                                default: throw new ArgumentException(
+                                    $"Unexpected delivery report field name '{part}' in config value '{ConfigPropertyNames.DeliveryReportEnabledFieldsPropertyName}'.");
+                            }
+                        }
+                    }
+                }
             }
 
             var logDelegateObj = config.FirstOrDefault(prop => prop.Key == ConfigPropertyNames.LogDelegateName).Value;
@@ -906,6 +970,19 @@ namespace Confluent.Kafka
             {
                 this.logDelegate = (Action<LogMessage>)logDelegateObj;
             }
+
+            var errorDelegateObj = config.FirstOrDefault(prop => prop.Key == ConfigPropertyNames.ErrorDelegateName).Value;
+            if (errorDelegateObj != null)
+            {
+                this.errorDelegate = (Action<Error>)errorDelegateObj;
+            }
+
+            var statsDelegateObj = config.FirstOrDefault(prop => prop.Key == ConfigPropertyNames.StatsDelegateName).Value;
+            if (statsDelegateObj != null)
+            {
+                this.statsDelegate = (Action<string>)statsDelegateObj;
+            }
+
 
             // Note: changing the default value of produce.offset.report at the binding level is less than
             // ideal since it means the librdkafka configuration docs will no longer completely match the 
@@ -931,17 +1008,17 @@ namespace Confluent.Kafka
             }
 
             // Explicitly keep references to delegates so they are not reclaimed by the GC.
-            errorDelegate = ErrorCallback;
+            errorCallbackDelegate = ErrorCallback;
             logCallbackDelegate = LogCallback;
-            statsDelegate = StatsCallback;
+            statsCallbackDelegate = StatsCallback;
 
             // TODO: provide some mechanism whereby calls to the error and log callbacks are cached until
             //       such time as event handlers have had a chance to be registered.
-            Librdkafka.conf_set_error_cb(configPtr, errorDelegate);
+            Librdkafka.conf_set_error_cb(configPtr, errorCallbackDelegate);
             Librdkafka.conf_set_log_cb(configPtr, logCallbackDelegate);
-            Librdkafka.conf_set_stats_cb(configPtr, statsDelegate);
+            Librdkafka.conf_set_stats_cb(configPtr, statsCallbackDelegate);
 
-            this.kafkaHandle = SafeKafkaHandle.Create(RdKafkaType.Producer, configPtr);
+            this.kafkaHandle = SafeKafkaHandle.Create(RdKafkaType.Producer, configPtr, this);
             configHandle.SetHandleAsInvalid(); // config object is no longer useable.
 
             if (!manualPoll)
@@ -984,18 +1061,6 @@ namespace Confluent.Kafka
         /// <summary>
         ///     <see cref="Confluent.Kafka.Producer{TKey, TValue}" />
         /// </summary>
-        public event EventHandler<Error> OnError;
-
-
-        /// <summary>
-        ///     <see cref="Confluent.Kafka.Producer{TKey, TValue}" />
-        /// </summary>
-        public event EventHandler<string> OnStatistics;
-
-
-        /// <summary>
-        ///     <see cref="Confluent.Kafka.Producer{TKey, TValue}" />
-        /// </summary>
         public void Dispose()
         {
             Dispose(true);
@@ -1008,6 +1073,13 @@ namespace Confluent.Kafka
         /// </summary>
         protected virtual void Dispose(bool disposing)
         {
+            // Calling Dispose a second or subsequent time should be a no-op.
+            lock (disposeHasBeenCalledLockObj)
+            { 
+                if (disposeHasBeenCalled) { return; }
+                disposeHasBeenCalled = true;
+            }
+
             if (disposing)
             {
                 if (!this.manualPoll)
@@ -1031,6 +1103,12 @@ namespace Confluent.Kafka
                         callbackCts.Dispose();
                     }
                 }
+
+                // calls to rd_kafka_destroy may result in callbacks
+                // as a side-effect. however the callbacks this class
+                // registers with librdkafka ensure that any registered
+                // events are not called if kafkaHandle has been closed.
+                // this avoids deadlocks in common scenarios.
                 kafkaHandle.Dispose();
             }
         }

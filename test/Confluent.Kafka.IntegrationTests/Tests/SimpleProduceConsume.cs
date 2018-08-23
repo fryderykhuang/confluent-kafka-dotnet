@@ -33,6 +33,8 @@ namespace Confluent.Kafka.IntegrationTests
         [Theory, MemberData(nameof(KafkaParameters))]
         public static void SimpleProduceConsume(string bootstrapServers, string singlePartitionTopic, string partitionedTopic)
         {
+            LogToFile("start SimpleProduceConsume");
+
             var producerConfig = new Dictionary<string, object>
             {
                 { "bootstrap.servers", bootstrapServers }
@@ -60,9 +62,10 @@ namespace Confluent.Kafka.IntegrationTests
             {
                 ConsumeMessage(consumer, produceResult1, testString1);
                 ConsumeMessage(consumer, produceResult2, testString2);
-
-                consumer.Close();
             }
+            
+            Assert.Equal(0, Library.HandleCount);
+            LogToFile("end   SimpleProduceConsume");
         }
 
         private static void ConsumeMessage(Consumer<byte[], byte[]> consumer, DeliveryReport<Null, string> dr, string testString)
@@ -80,6 +83,7 @@ namespace Confluent.Kafka.IntegrationTests
         {
             var result = producer.ProduceAsync(topic, new Message<Null, string> { Value = testString }).Result;
             Assert.NotNull(result);
+            Assert.NotNull(result.Message);
             Assert.Equal(topic, result.Topic);
             Assert.NotEqual<long>(result.Offset, Offset.Invalid);
             Assert.Equal(TimestampType.CreateTime, result.Message.Timestamp.Type);
