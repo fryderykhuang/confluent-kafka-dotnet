@@ -556,14 +556,15 @@ namespace Confluent.Kafka
                     throw new ConsumeException(
                         new ConsumeResult<byte[], byte[]>
                         {
-                            TopicPartitionOffsetError = new TopicPartitionOffsetError(topic, msg.partition, msg.offset, new Error(msg.err)),
+                            TopicPartitionOffset = new TopicPartitionOffset(topic, msg.partition, msg.offset),
                             Message = new Message<byte[], byte[]>
                             {
                                 Timestamp = timestamp,
                                 Key = KeyAsByteArray(msg),
                                 Value = ValueAsByteArray(msg)
                             }
-                        }
+                        },
+                        new Error(msg.err)
                     );
                 }
 
@@ -584,14 +585,15 @@ namespace Confluent.Kafka
                     throw new ConsumeException(
                         new ConsumeResult<byte[], byte[]>
                         {
-                            TopicPartitionOffsetError = new TopicPartitionOffsetError(topic, msg.partition, msg.offset, new Error(ErrorCode.Local_KeyDeserialization, ex.ToString())),
+                            TopicPartitionOffset = new TopicPartitionOffset(topic, msg.partition, msg.offset),
                             Message = new Message<byte[], byte[]>
                             {
                                 Timestamp = timestamp,
                                 Key = KeyAsByteArray(msg),
                                 Value = ValueAsByteArray(msg)
                             }
-                        }
+                        },
+                        new Error(ErrorCode.Local_KeyDeserialization, ex.ToString())
                     );
                 }
 
@@ -611,14 +613,15 @@ namespace Confluent.Kafka
                     throw new ConsumeException(
                         new ConsumeResult<byte[], byte[]>
                         {
-                            TopicPartitionOffsetError = new TopicPartitionOffsetError(topic, msg.partition, msg.offset, new Error(ErrorCode.Local_ValueDeserialization, ex.ToString())),
+                            TopicPartitionOffset = new TopicPartitionOffset(topic, msg.partition, msg.offset),
                             Message = new Message<byte[], byte[]>
                             {
                                 Timestamp = timestamp,
                                 Key = KeyAsByteArray(msg),
                                 Value = ValueAsByteArray(msg)
                             }
-                        }
+                        },
+                        new Error(ErrorCode.Local_ValueDeserialization, ex.ToString())
                     );
                 }
 
