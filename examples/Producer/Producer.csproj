@@ -5,10 +5,11 @@
     <AssemblyName>Producer</AssemblyName>
     <TargetFramework>netcoreapp2.1</TargetFramework>
     <OutputType>Exe</OutputType>
+    <LangVersion>7.1</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- nuget package reference: <PackageReference Include="Confluent.Kafka" Version="1.0-experimental-10" /> -->
+    <!-- nuget package reference: <PackageReference Include="Confluent.Kafka" Version="1.0-experimental-11" /> -->
     <ProjectReference Include="../../src/Confluent.Kafka/Confluent.Kafka.csproj" />
   </ItemGroup>
   

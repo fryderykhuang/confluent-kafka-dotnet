@@ -377,7 +377,7 @@ namespace Confluent.Kafka.Impl
         ///     - allTopics=false, topic=null - request only locally known topics (topic_new():ed topics or otherwise locally referenced once, such as consumed topics)
         ///     - allTopics=false, topic=valid - request specific topic
         /// </summary>
-        internal Metadata GetMetadata(bool allTopics, SafeTopicHandle topic, int millisecondsTimeout)
+        internal Metadata QueryMetadata(bool allTopics, SafeTopicHandle topic, int millisecondsTimeout)
         {
             ThrowIfHandleClosed();
 
@@ -537,10 +537,7 @@ namespace Confluent.Kafka.Impl
             }
         }
 
-        internal IntPtr ConsumerPoll(
-            bool enableTimestampMarshaling,
-            bool enableHeaderMarshaling,
-            IntPtr millisecondsTimeout)
+        internal IntPtr ConsumerPoll(IntPtr millisecondsTimeout)
         {
             ThrowIfHandleClosed();
             
@@ -655,7 +652,7 @@ namespace Confluent.Kafka.Impl
         }
 
 
-        internal List<TopicPartitionOffset> CommitSync(IEnumerable<TopicPartitionOffset> offsets)
+        internal List<TopicPartitionOffset> Commit(IEnumerable<TopicPartitionOffset> offsets)
         {
             ThrowIfHandleClosed();
 

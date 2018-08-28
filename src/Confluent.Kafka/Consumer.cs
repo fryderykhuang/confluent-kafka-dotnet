@@ -127,7 +127,7 @@ namespace Confluent.Kafka
 
             if (err == ErrorCode.Local_AssignPartitions)
             {
-                var handler = OnPartitionAssignmentReceived;
+                var handler = OnPartitionsAssigned;
                 if (handler != null && handler.GetInvocationList().Length > 0)
                 {
                     assignCalled = false;
@@ -142,7 +142,7 @@ namespace Confluent.Kafka
             }
             else if (err == ErrorCode.Local_RevokePartitions)
             {
-                var handler = OnPartitionAssignmentRevoked;
+                var handler = OnPartitionsRevoked;
                 if (handler != null && handler.GetInvocationList().Length > 0)
                 {
                     assignCalled = false;
@@ -181,7 +181,9 @@ namespace Confluent.Kafka
         ///     A collection of librdkafka configuration parameters 
         ///     (refer to https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md)
         ///     and parameters specific to this client (refer to: 
-        ///     <see cref="Confluent.Kafka.ConfigPropertyNames" />)
+        ///     <see cref="Confluent.Kafka.ConfigPropertyNames" />).
+        ///     At a minimum, 'bootstrap.servers' and 'group.id' must be
+        ///     specified.
         /// </param>
         /// <param name="keyDeserializer">
         ///     An IDeserializer implementation instance for deserializing keys.
@@ -366,14 +368,10 @@ namespace Confluent.Kafka
 
         internal ConsumeResult<TKey, TValue> Consume(int millisecondsTimeout)
         {
-            var msgPtr = kafkaHandle.ConsumerPoll(enableTimestampMarshaling, enableHeaderMarshaling, (IntPtr)millisecondsTimeout);
+            var msgPtr = kafkaHandle.ConsumerPoll((IntPtr)millisecondsTimeout);
             if (msgPtr == IntPtr.Zero)
             {
-                return new ConsumeResult<TKey, TValue>
-                {
-                    TopicPartitionOffset = new TopicPartitionOffset(null, Partition.Any, Offset.Invalid),
-                    Message = null
-                };
+                return null;
             }
 
             try
@@ -391,11 +389,8 @@ namespace Confluent.Kafka
 
                 if (msg.err == ErrorCode.Local_PartitionEOF)
                 {
-                    return new ConsumeResult<TKey, TValue>
-                    {
-                        TopicPartitionOffset = new TopicPartitionOffset(topic, msg.partition, msg.offset),
-                        IsPartitionEOF = true
-                    };
+                    OnPartitionEOF?.Invoke(this, new TopicPartitionOffset(topic, msg.partition, msg.offset));
+                    return null;
                 }
 
                 long timestampUnix = 0;
@@ -689,44 +684,6 @@ namespace Confluent.Kafka
 
 
         /// <summary>
-        ///     Poll for new messages / consumer events. Blocks until a consume 
-        ///     result is available or the timeout period has elapsed.
-        /// </summary>
-        /// <param name="timeout">
-        ///     The maximum period of time the call may block.
-        /// </param>
-        /// <returns>
-        ///     The consume result.
-        /// </returns>
-        /// <remarks>
-        ///     OnPartitionsAssigned/Revoked and OnOffsetsCommitted events
-        ///     may be invoked as a side-effect of calling this method (on 
-        ///     the same thread).
-        /// </remarks>
-        public Task<ConsumeResult<TKey, TValue>> ConsumeAsync(TimeSpan timeout)
-            => Task.Run(() => Consume(timeout));
-
-
-        /// <summary>
-        ///     Poll for new messages / consumer events. Blocks until a consume
-        ///     result is available or the operation has been cancelled.
-        /// </summary>
-        /// <param name="cancellationToken">
-        ///     A cancellation token that can be used to cancel this operation.
-        /// </param>
-        /// <returns>
-        ///     The consume result.
-        /// </returns>
-        /// <remarks>
-        ///     OnPartitionsAssigned/Revoked and OnOffsetsCommitted events
-        ///     may be invoked as a side-effect of calling this method (on 
-        ///     the same thread).
-        /// </remarks>
-        public Task<ConsumeResult<TKey, TValue>> ConsumeAsync(CancellationToken cancellationToken = default(CancellationToken))
-            => Task.Run(() => Consume(cancellationToken));
-
-
-        /// <summary>
         ///     Raised when a new partition assignment is received.
         /// 
         ///     If you do not call the <see cref="Confluent.Kafka.Consumer{TKey, TValue}.Assign(IEnumerable{TopicPartition})" />
@@ -742,7 +699,7 @@ namespace Confluent.Kafka
         ///     <see cref="Confluent.Kafka.Consumer{TKey, TValue}.Consume(CancellationToken)" />
         ///     (on the same thread).
         /// </remarks>
-        public event EventHandler<List<TopicPartition>> OnPartitionAssignmentReceived;
+        public event EventHandler<List<TopicPartition>> OnPartitionsAssigned;
 
 
         /// <summary>
@@ -760,7 +717,7 @@ namespace Confluent.Kafka
         ///     and <see cref="Confluent.Kafka.Consumer{TKey, TValue}.Close()" />
         ///     (on the same thread).
         /// </remarks>
-        public event EventHandler<List<TopicPartition>> OnPartitionAssignmentRevoked;
+        public event EventHandler<List<TopicPartition>> OnPartitionsRevoked;
 
 
         /// <summary>
@@ -773,6 +730,15 @@ namespace Confluent.Kafka
         ///     (on the same thread).
         /// </remarks>
         public event EventHandler<CommittedOffsets> OnOffsetsCommitted;
+
+
+        /// <summary>
+        ///     Raised when the consumer reaches the end of a topic/partition it is reading from.
+        /// </summary>
+        /// <remarks>
+        ///     Executes on the same thread as every other Consumer event handler.
+        /// </remarks>
+        public event EventHandler<TopicPartitionOffset> OnPartitionEOF;
 
 
         /// <summary>
@@ -978,9 +944,9 @@ namespace Confluent.Kafka
         ///     via the <see cref="Confluent.Kafka.TopicPartitionOffsetException.Results" />
         ///     property of the exception.
         /// </exception>
-        public Task<List<TopicPartitionOffset>> CommitAsync(CancellationToken cancellationToken = default(CancellationToken))
+        public List<TopicPartitionOffset> Commit(CancellationToken cancellationToken = default(CancellationToken))
             // TODO: use a librdkafka queue for this.
-            => Task.Run(() => kafkaHandle.CommitSync(null));
+            => kafkaHandle.Commit(null);
 
 
         /// <summary>
@@ -1005,7 +971,7 @@ namespace Confluent.Kafka
         /// <exception cref="Confluent.Kafka.TopicPartitionOffsetException">
         ///     Thrown if the result is in error.
         /// </exception>
-        public Task<TopicPartitionOffset> CommitAsync(
+        public TopicPartitionOffset Commit(
             ConsumeResult<TKey, TValue> result, CancellationToken cancellationToken = default(CancellationToken))
         {
             if (result.Message == null)
@@ -1013,7 +979,7 @@ namespace Confluent.Kafka
                 throw new InvalidOperationException("Attempt was made to commit offset corresponding to an empty consume result");
             }
 
-            return Task.Run(() => kafkaHandle.CommitSync(new [] { new TopicPartitionOffset(result.TopicPartition, result.Offset + 1) })[0]);
+            return kafkaHandle.Commit(new [] { new TopicPartitionOffset(result.TopicPartition, result.Offset + 1) })[0];
         }
 
 
@@ -1040,9 +1006,9 @@ namespace Confluent.Kafka
         ///     via the <see cref="Confluent.Kafka.TopicPartitionOffsetException.Results" />
         ///     property of the exception.
         /// </exception>
-        public Task CommitAsync(IEnumerable<TopicPartitionOffset> offsets, CancellationToken cancellationToken = default(CancellationToken))
+        public void Commit(IEnumerable<TopicPartitionOffset> offsets, CancellationToken cancellationToken = default(CancellationToken))
             // TODO: use a librdkafka queue for this.
-            => Task.Run(() => kafkaHandle.CommitSync(offsets));
+            => kafkaHandle.Commit(offsets);
 
 
         /// <summary>
@@ -1122,12 +1088,12 @@ namespace Confluent.Kafka
         ///     via the <see cref="Confluent.Kafka.TopicPartitionOffsetException.Results" />
         ///     property of the exception.
         /// </exception>
-        public Task<List<TopicPartitionOffset>> CommittedAsync(
+        public List<TopicPartitionOffset> Committed(
             IEnumerable<TopicPartition> partitions, TimeSpan timeout,
             CancellationToken cancellationToken = default(CancellationToken)
         )
             // TODO: use a librdkafka queue for this.
-            => Task.Run(() => kafkaHandle.Committed(partitions, (IntPtr)timeout.TotalMillisecondsAsInt()));
+            => kafkaHandle.Committed(partitions, (IntPtr)timeout.TotalMillisecondsAsInt());
 
 
         /// <summary>
@@ -1185,12 +1151,12 @@ namespace Confluent.Kafka
         ///     via the <see cref="Confluent.Kafka.TopicPartitionOffsetException.Results" />
         ///     property of the exception.
         /// </exception>
-        public Task<List<TopicPartitionOffset>> OffsetsForTimesAsync(
+        public List<TopicPartitionOffset> OffsetsForTimes(
             IEnumerable<TopicPartitionTimestamp> timestampsToSearch, TimeSpan timeout,
             CancellationToken cancellationToken = default(CancellationToken)
         )
             // TODO: use a librdkafka queue for this.
-            => Task.Run(() => kafkaHandle.OffsetsForTimes(timestampsToSearch, timeout.TotalMillisecondsAsInt()));
+            => kafkaHandle.OffsetsForTimes(timestampsToSearch, timeout.TotalMillisecondsAsInt());
 
 
         /// <summary>
@@ -1233,7 +1199,7 @@ namespace Confluent.Kafka
         ///     or <see cref="Confluent.Kafka.Consumer{TKey, TValue}.Unsubscribe" />,
         ///     the group will rebalance after a timeout specified by the broker
         ///     config property `group.max.session.timeout.ms`. Note: the
-        ///     <see cref="Confluent.Kafka.Consumer{TKey, TValue}.OnPartitionAssignmentRevoked" />
+        ///     <see cref="Confluent.Kafka.Consumer{TKey, TValue}.OnPartitionsRevoked" />
         ///     event will be called as a side-effect of calling this
         ///     method.
         /// </summary>

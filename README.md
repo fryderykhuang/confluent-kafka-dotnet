@@ -42,18 +42,18 @@ confluent-kafka-dotnet is distributed via NuGet. We provide three packages:
 To install Confluent.Kafka from within Visual Studio, search for Confluent.Kafka in the NuGet Package Manager UI, or run the following command in the Package Manager Console:
 
 ```
-Install-Package Confluent.Kafka -Version 1.0-experimental-10
+Install-Package Confluent.Kafka -Version 1.0-experimental-11
 ```
 
 To add a reference to a dotnet core project, execute the following at the command line:
 
 ```
-dotnet add package -v 1.0-experimental-10 Confluent.Kafka
+dotnet add package -v 1.0-experimental-11 Confluent.Kafka
 ```
 
-We recommend using 1.0 pre-release versions of Confluent.Kafka for new projects in preference to the most recent stable release (0.11.5). The 1.0 API provides more features, is considerably improved and is more performant than 0.11.x releases. Be warned that we may still make breaking API changes before the 1.0 release but the API is now close to it's final form. We are not depreciating 0.11.x releases immediately. In addition to 1.x releases, we will continue with 0.11.x maintenance releases going forward.
+We recommend using the latest 1.0 beta version of Confluent.Kafka for new projects in preference to the most recent stable release (0.11.5). The 1.0 API provides more features, is considerably improved and is more performant than 0.11.x releases. However, be warned that we may still make breaking API changes prior to the final 1.0 release. 
 
-Nuget packages corresponding to commits to release branches are available from the following nuget package source (Note: this is not a web URL - you 
+Nuget packages corresponding to all commits to release branches are available from the following nuget package source (Note: this is not a web URL - you 
 should specify it in the nuget package manger):
 [https://ci.appveyor.com/nuget/confluent-kafka-dotnet](https://ci.appveyor.com/nuget/confluent-kafka-dotnet). The version suffix of these nuget packages 
 matches the appveyor build number. You can see which commit a particular build number corresponds to by looking at the 
@@ -70,26 +70,31 @@ For an overview of configuration properties, refer to the [librdkafka documentat
 
 ```csharp
 using System;
-using System.Text;
 using System.Collections.Generic;
+using System.Text;
+using System.Threading.Tasks;
 using Confluent.Kafka;
 using Confluent.Kafka.Serialization;
 
-public class Program
+class Program
 {
-  public static void Main()
-  {
-    var config = new Dictionary<string, object> 
-    { 
-        { "bootstrap.servers", "localhost:9092" } 
-    };
-
-    using (var producer = new Producer<Null, string>(config, null, new StringSerializer(Encoding.UTF8)))
+    public static async Task Main(string[] args)
     {
-      var dr = producer.ProduceAsync("my-topic", null, "test message text").Result;
-      Console.WriteLine($"Delivered '{dr.Value}' to: {dr.TopicPartitionOffset}");
+        var config = new Dictionary<string, object> { { "bootstrap.servers", "localhost:9092" } };
+
+        using (var p = new Producer<Null, string>(config, null, new StringSerializer(Encoding.UTF8)))
+        {
+            try
+            {
+                var dr = await p.ProduceAsync("test-topic", new Message<Null, string> { Value="test" });
+                Console.WriteLine($"Delivered '{dr.Value}' to '{dr.TopicPartitionOffset}'");
+            }
+            catch (ProduceException<Null, string> e)
+            {
+                Console.WriteLine($"An error occured: {e.Error.Reason}");
+            }
+        }
     }
-  }
 }
 ```
 
@@ -97,42 +102,43 @@ public class Program
 
 ```csharp
 using System;
-using System.Text;
 using System.Collections.Generic;
+using System.Text;
+using System.Threading.Tasks;
 using Confluent.Kafka;
 using Confluent.Kafka.Serialization;
 
-public class Program
+class Program
 {
-  public static void Main()
-  {
-    var conf = new Dictionary<string, object> 
-    { 
-      { "group.id", "test-consumer-group" },
-      { "bootstrap.servers", "localhost:9092" },
-      { "auto.commit.interval.ms", 5000 },
-      { "auto.offset.reset", "earliest" }
-    };
-
-    using (var consumer = new Consumer<Null, string>(conf, null, new StringDeserializer(Encoding.UTF8)))
+    public static void Main(string[] args)
     {
-      consumer.OnMessage += (_, msg)
-        => Console.WriteLine($"Read '{msg.Value}' from: {msg.TopicPartitionOffset}");
+        var conf = new Dictionary<string, object> 
+        { 
+            { "group.id", "test-consumer-group" },
+            { "bootstrap.servers", "localhost:9092" },
+            { "auto.offset.reset", "earliest" }
+        };
 
-      consumer.OnError += (_, error)
-        => Console.WriteLine($"Error: {error}");
+        using (var c = new Consumer<Ignore, string>(conf, null, new StringDeserializer(Encoding.UTF8)))
+        {
+            c.Subscribe("my-topic");
 
-      consumer.OnConsumeError += (_, msg)
-        => Console.WriteLine($"Consume error ({msg.TopicPartitionOffset}): {msg.Error}");
-
-      consumer.Subscribe("my-topic");
-
-      while (true)
-      {
-        consumer.Poll(TimeSpan.FromMilliseconds(100));
-      }
+            while (true)
+            {
+                try
+                {
+                    var r = c.Consume();
+                    Console.WriteLine($"Consumed message '{r.Value}' at: '{r.TopicPartitionOffset}'.");
+                }
+                catch (ConsumeException e)
+                {
+                    Console.WriteLine($"Error occured: {e.Error.Reason}");
+                }
+            }
+            
+            c.Close();
+        }
     }
-  }
 }
 ```
 
@@ -161,11 +167,6 @@ For more information about working with Avro in .NET, refer to the the blog post
 ### Confluent Cloud
 
 The [Confluent Cloud example](examples/ConfluentCloud) demonstrates how to configure the .NET client for use with [Confluent Cloud](https://www.confluent.io/confluent-cloud/).
-
-
-### Known Issues
-
-The mechanism used by librdkafka to poll simultaneously for both new application and socket events is not supported on Windows. If you are on Windows and experiencing poor latency (which may happen in low throughput scenarios in particular), as a workaround, set `socket.blocking.max.ms` to `1` to limit the time librdkafka will block waiting for network events to 1ms (the trade-off being higher CPU usage). We will optimize the librdkafka control loop for use on Windows in a future version of the library.
 
 
 ## Build
