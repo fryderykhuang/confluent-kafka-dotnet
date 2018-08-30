@@ -265,7 +265,7 @@ namespace Confluent.Kafka
             {
                 var fields = enabledFieldsObj.ToString().Replace(" ", "");
                 if (fields != "all")
-                {
+                {       
                     this.enableHeaderMarshaling = false;
                     this.enableTimestampMarshaling = false;
                     this.enableTopicNamesMarshaling = false;
@@ -521,7 +521,7 @@ namespace Confluent.Kafka
 
         public SimpleConsumeResult<TKey, TValue> ConsumeFast(int millisecondsTimeout)
         {
-            var msgPtr = kafkaHandle.ConsumerPoll(enableTimestampMarshaling, enableHeaderMarshaling, (IntPtr)millisecondsTimeout);
+            var msgPtr = kafkaHandle.ConsumerPoll((IntPtr)millisecondsTimeout);
             if (msgPtr == IntPtr.Zero)
             {
                 return default;
@@ -546,6 +546,28 @@ namespace Confluent.Kafka
                 }
                 var timestamp = new Timestamp(timestampUnix, (TimestampType)timestampType);
 
+                Headers headers = null;
+                if (enableHeaderMarshaling)
+                {
+                    headers = new Headers();
+                    Librdkafka.message_headers(msgPtr, out IntPtr hdrsPtr);
+                    if (hdrsPtr != IntPtr.Zero)
+                    {
+                        for (var i = 0; ; ++i)
+                        {
+                            var err = Librdkafka.header_get_all(hdrsPtr, (IntPtr)i, out IntPtr namep, out IntPtr valuep, out IntPtr sizep);
+                            if (err != ErrorCode.NoError)
+                            {
+                                break;
+                            }
+                            var headerName = Util.Marshal.PtrToStringUTF8(namep);
+                            var headerValue = new byte[(int)sizep];
+                            Marshal.Copy(valuep, headerValue, 0, (int)sizep);
+                            headers.Add(new Header(headerName, headerValue));
+                        }
+                    }
+                }
+
                 if (msg.err != ErrorCode.NoError)
                 {
                     throw new ConsumeException(
@@ -556,7 +578,8 @@ namespace Confluent.Kafka
                             {
                                 Timestamp = timestamp,
                                 Key = KeyAsByteArray(msg),
-                                Value = ValueAsByteArray(msg)
+                                Value = ValueAsByteArray(msg),
+                                Headers = headers
                             }
                         },
                         new Error(msg.err)
@@ -585,7 +608,8 @@ namespace Confluent.Kafka
                             {
                                 Timestamp = timestamp,
                                 Key = KeyAsByteArray(msg),
-                                Value = ValueAsByteArray(msg)
+                                Value = ValueAsByteArray(msg),
+                                Headers = headers
                             }
                         },
                         new Error(ErrorCode.Local_KeyDeserialization, ex.ToString())
@@ -613,7 +637,8 @@ namespace Confluent.Kafka
                             {
                                 Timestamp = timestamp,
                                 Key = KeyAsByteArray(msg),
-                                Value = ValueAsByteArray(msg)
+                                Value = ValueAsByteArray(msg),
+                                Headers = headers
                             }
                         },
                         new Error(ErrorCode.Local_ValueDeserialization, ex.ToString())
@@ -626,7 +651,8 @@ namespace Confluent.Kafka
                     Offset = msg.offset,
                     Timestamp = timestamp.UtcDateTime,
                     Key = key,
-                    Value = val
+                    Value = val,
+                    Headers = headers
                 };
             }
             finally

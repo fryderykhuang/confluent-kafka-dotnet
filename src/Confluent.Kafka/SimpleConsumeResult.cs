@@ -44,5 +44,6 @@ namespace Confluent.Kafka
         public DateTime Timestamp { get; set; }
         public int Partition { get; set; }
         public long Offset { get; set; }
+        public Headers Headers { get; set; }
     }
 }
