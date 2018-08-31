@@ -1,4 +1,4 @@
-// Copyright 2018 Confluent Inc.
+// Copyright 2016-2017 Confluent Inc., 2015-2016 Andreas Heider
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,30 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
+// Derived from: rdkafka-dotnet, licensed under the 2-clause BSD License.
+//
 // Refer to LICENSE for more information.
 
-using System;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Collections.Generic;
-
-
-namespace Confluent.Kafka.Admin
+namespace Confluent.Kafka
 {
     /// <summary>
-    ///     The result of an alter config request for a specific resource.
+    ///     Encapsulates an error and severity level.
     /// </summary>
-    public class AlterConfigResult
+    public class ErrorEvent
     {
         /// <summary>
-        ///     The resource the result corresponds to.
+        ///     A librdkafka error
         /// </summary>
-        public ConfigResource ConfigResource;
+        public Error Error;
 
         /// <summary>
-        ///     The error (or success) of the alter config request.
+        ///     The error severity level
         /// </summary>
-        public Error Error { get; set; }
+        public SyslogLevel Level;
     }
 }

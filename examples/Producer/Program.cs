@@ -29,7 +29,6 @@ namespace Confluent.Kafka.Examples.Producer
 {
     public class Program
     {
-        // Note: async Main requires C# 7.1 or above.
         public static async Task Main(string[] args)
         {
             if (args.Length != 2)
@@ -99,7 +98,7 @@ namespace Confluent.Kafka.Examples.Producer
                         var deliveryReport = await producer.ProduceAsync(topicName, new Message<string, string> { Key = key, Value = val });
                         Console.WriteLine($"delivered to: {deliveryReport.TopicPartitionOffset}");
                     }
-                    catch (ProduceException<string, string> e)
+                    catch (KafkaException e)
                     {
                         Console.WriteLine($"failed to deliver message: {e.Message} [{e.Error.Code}]");
                     }

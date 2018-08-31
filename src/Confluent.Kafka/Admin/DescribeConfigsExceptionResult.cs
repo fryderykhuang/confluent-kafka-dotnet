@@ -20,25 +20,23 @@ using System.Collections.Generic;
 namespace Confluent.Kafka.Admin
 {
     /// <summary>
-    ///     Specification for new partitions to be added to a topic.
+    ///     The result of a request to describe the configs of a specific resource.
     /// </summary>
-    public class PartitionsSpecification
+    public class DescribeConfigsExceptionResult
     {
         /// <summary>
-        ///     The topic that the new partitions specification corresponds to.
+        ///     The resource associated with the describe configs request.
         /// </summary>
-        public string Topic { get; set; }
-        
-        /// <summary>
-        ///     The replica assignments for the new partitions, or null if the assignment
-        ///     will be done by the controller. The outer list is indexed by the new 
-        ///     partitions relative index, and the inner list contains the broker ids.
-        /// </summary>
-        public List<List<int>> ReplicaAssignments { get; set; } = null;
+        public ConfigResource ConfigResource;
 
         /// <summary>
-        ///     The partition count for the specified topic is increased to this value.
+        ///     Configuration entries for the specified resource.
         /// </summary>
-        public int IncreaseTo { get; set; }
+        public Dictionary<string, ConfigEntryResult> Entries { get; set; }
+
+        /// <summary>
+        ///     The error (or success) of the describe config request.
+        /// </summary>
+        public Error Error { get; set; }
     }
 }

@@ -53,46 +53,46 @@ namespace Confluent.Kafka
 
 
         /// <summary>
-        ///     Refer to <see cref="Confluent.Kafka.AdminClient.QueryMetadata(string, TimeSpan)" />
+        ///     Refer to <see cref="Confluent.Kafka.AdminClient.GetMetadata(string, TimeSpan)" />
         /// </summary>
-        Metadata QueryMetadata(string topic, TimeSpan timeout);
+        Metadata GetMetadata(string topic, TimeSpan timeout);
 
 
         /// <summary>
-        ///     Refer to <see cref="Confluent.Kafka.AdminClient.QueryMetadata(TimeSpan)" />
+        ///     Refer to <see cref="Confluent.Kafka.AdminClient.GetMetadata(TimeSpan)" />
         /// </summary>
-        Metadata QueryMetadata(TimeSpan timeout);
+        Metadata GetMetadata(TimeSpan timeout);
 
 
         /// <summary>
         ///     Refer to <see cref="Confluent.Kafka.AdminClient.CreatePartitionsAsync(IEnumerable{PartitionsSpecification}, CreatePartitionsOptions)" />
         /// </summary>
-        Task<List<CreatePartitionsResult>> CreatePartitionsAsync(
+        Task CreatePartitionsAsync(
             IEnumerable<PartitionsSpecification> partitionsSpecifications, CreatePartitionsOptions options = null);
 
 
         /// <summary>
         ///     Refer to <see cref="Confluent.Kafka.AdminClient.DeleteTopicsAsync(IEnumerable{string}, DeleteTopicsOptions)" />
         /// </summary>
-        Task<List<DeleteTopicResult>> DeleteTopicsAsync(IEnumerable<string> topics, DeleteTopicsOptions options = null);
+        Task DeleteTopicsAsync(IEnumerable<string> topics, DeleteTopicsOptions options = null);
 
 
         /// <summary>
         ///     Refer to <see cref="Confluent.Kafka.AdminClient.CreateTopicsAsync(IEnumerable{TopicSpecification}, CreateTopicsOptions)" />
         /// </summary>
-        Task<List<CreateTopicResult>> CreateTopicsAsync(IEnumerable<TopicSpecification> topics, CreateTopicsOptions options = null);
+        Task CreateTopicsAsync(IEnumerable<TopicSpecification> topics, CreateTopicsOptions options = null);
 
 
         /// <summary>
         ///     Refer to <see cref="Confluent.Kafka.AdminClient.AlterConfigsAsync(Dictionary{ConfigResource, List{ConfigEntry}}, AlterConfigsOptions)" />
         /// </summary>
-        Task<List<AlterConfigResult>> AlterConfigsAsync(Dictionary<ConfigResource, List<ConfigEntry>> configs, AlterConfigsOptions options = null);
+        Task AlterConfigsAsync(Dictionary<ConfigResource, List<ConfigEntry>> configs, AlterConfigsOptions options = null);
 
 
         /// <summary>
         ///     Refer to <see cref="Confluent.Kafka.AdminClient.DescribeConfigsAsync(IEnumerable{ConfigResource}, DescribeConfigsOptions)" />
         /// </summary>
-        Task<List<DescribeConfigResult>> DescribeConfigsAsync(IEnumerable<ConfigResource> resources, DescribeConfigsOptions options = null);
+        Task<List<DescribeConfigsResult>> DescribeConfigsAsync(IEnumerable<ConfigResource> resources, DescribeConfigsOptions options = null);
     }
 
 }

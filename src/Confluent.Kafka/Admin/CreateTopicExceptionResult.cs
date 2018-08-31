@@ -14,28 +14,27 @@
 //
 // Refer to LICENSE for more information.
 
+using System;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Collections.Generic;
 
 
 namespace Confluent.Kafka.Admin
 {
     /// <summary>
-    ///     The result of a request to describe the configs of a specific resource.
+    ///     The result of a request to create a specific topic.
     /// </summary>
-    public class DescribeConfigResult
+    public class CreateTopicExceptionResult
     {
         /// <summary>
-        ///     The resource associated with the describe configs request.
+        ///     The topic name.
         /// </summary>
-        public ConfigResource ConfigResource;
+        public string Topic { get; set; }
 
         /// <summary>
-        ///     Configuration entries for the specified resource.
-        /// </summary>
-        public Dictionary<string, ConfigEntryResult> Entries { get; set; }
-
-        /// <summary>
-        ///     The error (or success) of the describe config request.
+        ///     The error (or success) of the create topic request.
         /// </summary>
         public Error Error { get; set; }
     }

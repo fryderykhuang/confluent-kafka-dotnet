@@ -14,31 +14,28 @@
 //
 // Refer to LICENSE for more information.
 
+using System;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Collections.Generic;
 
 
 namespace Confluent.Kafka.Admin
 {
     /// <summary>
-    ///     Specification for new partitions to be added to a topic.
+    ///     The result of an alter config request for a specific resource.
     /// </summary>
-    public class PartitionsSpecification
+    public class AlterConfigsExceptionResult
     {
         /// <summary>
-        ///     The topic that the new partitions specification corresponds to.
+        ///     The resource the result corresponds to.
         /// </summary>
-        public string Topic { get; set; }
-        
-        /// <summary>
-        ///     The replica assignments for the new partitions, or null if the assignment
-        ///     will be done by the controller. The outer list is indexed by the new 
-        ///     partitions relative index, and the inner list contains the broker ids.
-        /// </summary>
-        public List<List<int>> ReplicaAssignments { get; set; } = null;
+        public ConfigResource ConfigResource;
 
         /// <summary>
-        ///     The partition count for the specified topic is increased to this value.
+        ///     The error (or success) of the alter config request.
         /// </summary>
-        public int IncreaseTo { get; set; }
+        public Error Error { get; set; }
     }
 }
