@@ -21,7 +21,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Confluent.Kafka.Serialization;
 using Xunit;
 
 namespace Confluent.Kafka.IntegrationTests
@@ -41,15 +40,15 @@ namespace Confluent.Kafka.IntegrationTests
 
             var messages = ProduceMessages(bootstrapServers, singlePartitionTopic, Partition, N);
 
-            var consumerConfig = new Dictionary<string, object>
+            var consumerConfig = new ConsumerConfig
             {
-                {"group.id", Guid.NewGuid().ToString()},
-                {"bootstrap.servers", bootstrapServers}
+                GroupId = Guid.NewGuid().ToString(),
+                BootstrapServers = bootstrapServers
             };
 
             var firstMessage = messages[0];
             var lastMessage = messages[N - 1];
-            using (var consumer = new Consumer<string, string>(consumerConfig, new StringDeserializer(Encoding.UTF8), new StringDeserializer(Encoding.UTF8)))
+            using (var consumer = new Consumer<string, string>(consumerConfig))
             {
                 var timeout = TimeSpan.FromSeconds(10);
 
@@ -101,13 +100,10 @@ namespace Confluent.Kafka.IntegrationTests
 
         private static DeliveryReport<string, string>[] ProduceMessages(string bootstrapServers, string topic, int partition, int count)
         {
-            var producerConfig = new Dictionary<string, object>
-            {
-                {"bootstrap.servers", bootstrapServers}
-            };
+            var producerConfig = new ProducerConfig { BootstrapServers = bootstrapServers };
 
             var messages = new DeliveryReport<string, string>[count];
-            using (var producer = new Producer<string, string>(producerConfig, new StringSerializer(Encoding.UTF8), new StringSerializer(Encoding.UTF8)))
+            using (var producer = new Producer<string, string>(producerConfig))
             {
                 for (var index = 0; index < count; index++)
                 {

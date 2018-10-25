@@ -22,7 +22,6 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using Confluent.Kafka.Admin;
-using Confluent.Kafka.Serialization;
 using Xunit;
 
 
@@ -38,7 +37,7 @@ namespace Confluent.Kafka.IntegrationTests
         {
             LogToFile("start AdminClient_DescribeConfigs");
 
-            using (var adminClient = new AdminClient(new Dictionary<string, object> { { "bootstrap.servers", bootstrapServers } }))
+            using (var adminClient = new AdminClient(new AdminClientConfig { BootstrapServers = bootstrapServers }))
             {
                 // broker configs
                 // ---

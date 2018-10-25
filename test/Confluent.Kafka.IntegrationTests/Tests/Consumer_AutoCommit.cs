@@ -21,7 +21,6 @@ using System.Linq;
 using System.Threading;
 using System.Text;
 using System.Collections.Generic;
-using Confluent.Kafka.Serialization;
 using Xunit;
 
 
@@ -41,16 +40,16 @@ namespace Confluent.Kafka.IntegrationTests
             int N = 2;
             var firstProduced = Util.ProduceMessages(bootstrapServers, singlePartitionTopic, 100, N);
 
-            var consumerConfig = new Dictionary<string, object>
+            var consumerConfig = new ConsumerConfig
             {
-                { "group.id", Guid.NewGuid().ToString() },
-                { "bootstrap.servers", bootstrapServers },
-                { "session.timeout.ms", 6000 },
-                { "auto.commit.interval.ms", 1000 },
-                { "enable.auto.commit", false }
+                GroupId = Guid.NewGuid().ToString(),
+                BootstrapServers = bootstrapServers,
+                SessionTimeoutMs = 6000,
+                AutoCommitIntervalMs = 1000,
+                EnableAutoCommit = false
             };
 
-            using (var consumer = new Consumer<Null, string>(consumerConfig, null, new StringDeserializer(Encoding.UTF8)))
+            using (var consumer = new Consumer<Null, string>(consumerConfig))
             {
                 bool done = false;
                 consumer.OnPartitionEOF += (_, tpo)

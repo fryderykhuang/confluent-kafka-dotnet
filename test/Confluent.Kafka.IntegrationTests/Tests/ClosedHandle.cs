@@ -20,7 +20,6 @@ using System;
 using System.Threading;
 using System.Collections.Generic;
 using Xunit;
-using Confluent.Kafka.Serialization;
 
 
 namespace Confluent.Kafka.IntegrationTests
@@ -36,12 +35,12 @@ namespace Confluent.Kafka.IntegrationTests
         {
             LogToFile("start Producer_ClosedHandle");
 
-            var producerConfig = new Dictionary<string, object>
+            var producerConfig = new ProducerConfig
             {
-                { "bootstrap.servers", bootstrapServers },
-                { "dotnet.producer.enable.background.poll", false }
+                BootstrapServers = bootstrapServers,
+                EnableBackgroundPoll = false
             };
-            var producer = new Producer<byte[], byte[]>(producerConfig, new ByteArraySerializer(), new ByteArraySerializer());
+            var producer = new Producer<byte[], byte[]>(producerConfig);
             producer.Poll(TimeSpan.FromMilliseconds(10));
             producer.Dispose();
             Assert.Throws<ObjectDisposedException>(() => producer.Poll(TimeSpan.FromMilliseconds(10)));
@@ -59,12 +58,8 @@ namespace Confluent.Kafka.IntegrationTests
         {
             LogToFile("start Consumer_ClosedHandle");
 
-            var consumerConfig = new Dictionary<string, object>
-            {
-                { "group.id", Guid.NewGuid().ToString() },
-                { "bootstrap.servers", bootstrapServers }
-            };
-            var consumer = new Consumer<byte[], byte[]>(consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+            var consumerConfig = new ConsumerConfig { GroupId = Guid.NewGuid().ToString(), BootstrapServers = bootstrapServers };
+            var consumer = new Consumer<byte[], byte[]>(consumerConfig);
             consumer.Consume(TimeSpan.FromMilliseconds(10));
             consumer.Dispose();
             Assert.Throws<ObjectDisposedException>(() => consumer.Consume(TimeSpan.FromMilliseconds(10)));
@@ -82,11 +77,8 @@ namespace Confluent.Kafka.IntegrationTests
         {
             LogToFile("start TypedProducer_ClosedHandle");
 
-            var producerConfig = new Dictionary<string, object>
-            {
-                { "bootstrap.servers", bootstrapServers },
-            };
-            var producer = new Producer<Null, Null>(producerConfig, null, null);
+            var producerConfig = new ProducerConfig { BootstrapServers = bootstrapServers };
+            var producer = new Producer<Null, Null>(producerConfig);
             producer.Flush(TimeSpan.FromMilliseconds(10));
             producer.Dispose();
             Thread.Sleep(TimeSpan.FromMilliseconds(500)); // kafka handle destroy is done on the poll thread, is not immediate.
@@ -105,12 +97,8 @@ namespace Confluent.Kafka.IntegrationTests
         {
             LogToFile("start TypedConsumer_ClosedHandle");
 
-            var consumerConfig = new Dictionary<string, object>
-            {
-                { "group.id", Guid.NewGuid().ToString() },
-                { "bootstrap.servers", bootstrapServers }
-            };
-            var consumer = new Consumer<Null, Null>(consumerConfig, null, null);
+            var consumerConfig = new ConsumerConfig { GroupId = Guid.NewGuid().ToString(), BootstrapServers = bootstrapServers };
+            var consumer = new Consumer<Null, Null>(consumerConfig);
             consumer.Consume(TimeSpan.FromMilliseconds(10));
             consumer.Dispose();
             Assert.Throws<ObjectDisposedException>(() => consumer.Consume(TimeSpan.FromMilliseconds(10)));

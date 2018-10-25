@@ -42,18 +42,19 @@ confluent-kafka-dotnet is distributed via NuGet. We provide three packages:
 To install Confluent.Kafka from within Visual Studio, search for Confluent.Kafka in the NuGet Package Manager UI, or run the following command in the Package Manager Console:
 
 ```
-Install-Package Confluent.Kafka -Version 1.0-experimental-12
+Install-Package Confluent.Kafka -Version 1.0-beta2
 ```
 
 To add a reference to a dotnet core project, execute the following at the command line:
 
 ```
-dotnet add package -v 1.0-experimental-12 Confluent.Kafka
+dotnet add package -v 1.0-beta2 Confluent.Kafka
 ```
 
-We recommend using the latest 1.0-beta version of Confluent.Kafka for new projects in preference to the most recent stable release (0.11.5). 
-The 1.0 API provides more features, is considerably improved and is more performant than 0.11.x releases. However, be warned that we may still
-make breaking API changes prior to the final 1.0 release. You can track progress and provide feedback on the new 1.0 API
+**Note:** We recommend using the `1.0-beta2` version of Confluent.Kafka for new projects in preference to the most recent stable release (0.11.5).
+The 1.0 API provides more features, is considerably improved and is more performant than 0.11.x releases. In choosing the label 'beta',
+we are signaling that we do not anticipate making any high impact changes to the API before the 1.0 release, however be warned that some 
+breaking changes are still planned. You can track progress and provide feedback on the new 1.0 API
 [here](https://github.com/confluentinc/confluent-kafka-dotnet/issues/614).
 
 ### Branch builds
@@ -80,20 +81,17 @@ optimizing communication with the Kafka brokers for you, batching requests as ap
 
 ```csharp
 using System;
-using System.Collections.Generic;
-using System.Text;
 using System.Threading.Tasks;
 using Confluent.Kafka;
-using Confluent.Kafka.Serialization;
 
 class Program
 {
     public static async Task Main(string[] args)
     {
-        var config = new Dictionary<string, object> { { "bootstrap.servers", "localhost:9092" } };
+        var config = new ProducerConfig { BootstrapServers = "localhost:9092" };
 
         // A Producer for sending messages with null keys and UTF-8 encoded values.
-        using (var p = new Producer<Null, string>(config, null, new StringSerializer(Encoding.UTF8)))
+        using (var p = new Producer<Null, string>(config))
         {
             try
             {
@@ -109,31 +107,28 @@ class Program
 }
 ```
 
-However, a server round-trip is slow (3ms at a minimum; actual latency depends on many factors).
-In highly concurrent scenarios you will get high overall throughput out of the producer using 
+Note that a server round-trip is slow (3ms at a minimum; actual latency depends on many factors).
+In highly concurrent scenarios you will achieve high overall throughput out of the producer using 
 the above approach, but there will be a delay on each `await` call. In stream processing 
 applications, where you would like to process many messages in rapid succession, you would typically
 make use the `BeginProduce` method instead:
 
 ```csharp
 using System;
-using System.Collections.Generic;
-using System.Text;
 using Confluent.Kafka;
-using Confluent.Kafka.Serialization;
 
 class Program
 {
     public static void Main(string[] args)
     {
-        var conf = new Dictionary<string, object> { { "bootstrap.servers", "localhost:9092" } };
+        var conf = new ProducerConfig { BootstrapServers = "localhost:9092" };
 
         Action<DeliveryReportResult<Null, string>> handler = r => 
             Console.WriteLine(!r.Error.IsError
                 ? $"Delivered message to {r.TopicPartitionOffset}"
                 : $"Delivery Error: {r.Error.Reason}");
 
-        using (var p = new Producer<Null, string>(conf, null, new StringSerializer(Encoding.UTF8)))
+        using (var p = new Producer<Null, string>(conf))
         {
             for (int i=0; i<100; ++i)
             {
@@ -151,28 +146,34 @@ class Program
 
 ```csharp
 using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Threading.Tasks;
 using Confluent.Kafka;
-using Confluent.Kafka.Serialization;
 
 class Program
 {
     public static void Main(string[] args)
     {
-        var conf = new Dictionary<string, object> 
+        var conf = new ConsumerConfig
         { 
-            { "group.id", "test-consumer-group" },
-            { "bootstrap.servers", "localhost:9092" },
-            { "auto.offset.reset", "earliest" }
+            GroupId = "test-consumer-group",
+            BootstrapServers = "localhost:9092",
+            // Note: The AutoOffsetReset property determines the start offset in the event
+            // there are not yet any committed offsets for the consumer group for the
+            // topic/partitions of interest. By default, offsets are committed
+            // automatically, so in this example, consumption will only start from the
+            // eariest message in the topic 'my-topic' the first time you run the program.
+            AutoOffsetReset = AutoOffsetResetType.Earliest
         };
 
-        using (var c = new Consumer<Ignore, string>(conf, null, new StringDeserializer(Encoding.UTF8)))
+        using (var c = new Consumer<Ignore, string>(conf))
         {
             c.Subscribe("my-topic");
 
-            while (true)
+            bool consuming = true;
+            // The client will automatically recover from non-fatal errors. You typically
+            // don't need to take any action unless an error is marked as fatal.
+            c.OnError += (_, e) => consuming = !e.IsFatal;
+
+            while (consuming)
             {
                 try
                 {
@@ -185,6 +186,7 @@ class Program
                 }
             }
             
+            // Ensure the consumer leaves the group cleanly and final offsets are committed.
             c.Close();
         }
     }

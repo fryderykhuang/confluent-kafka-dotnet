@@ -34,14 +34,12 @@ namespace Confluent.Kafka.Serialization
     ///       bytes 1-4:        Unique global id of the avro schema that was used for encoding (as registered in Confluent Schema Registry), big endian.
     ///       following bytes:  The serialized data.
     /// </remarks>
-    public class AvroSerializer<T> : ISerializer<T>
+    public class AvroSerializer<T>
     {
         private bool autoRegisterSchema = true;
         private int initialBufferSize = DefaultInitialBufferSize;
         private bool isKeySerializer;
         private ISchemaRegistryClient schemaRegistryClient;
-
-        private bool disposeClientOnDispose;
 
         private IAvroSerializerImpl<T> serializerImpl;
 
@@ -52,41 +50,6 @@ namespace Confluent.Kafka.Serialization
         /// </summary>
         public const int DefaultInitialBufferSize = 1024;
 
-        /// <summary>
-        ///     Initialize a new instance of AvroSerializer.
-        ///     
-        ///     When passed as a parameter to the Confluent.Kafka.Producer constructor,
-        ///     the following configuration properties will be extracted from the producer's
-        ///     configuration property collection:
-        ///     
-        ///     schema.registry.url (required) - A comma-separated list of URLs for schema registry 
-        ///         instances that are used to register or lookup schemas.
-        ///                           
-        ///     schema.registry.connection.timeout.ms (default: 30000) - Timeout for requests to 
-        ///         Confluent Schema Registry.
-        ///     
-        ///     schema.registry.max.cached.schemas (default: 1000) - The maximum number of schemas 
-        ///         to cache locally.
-        ///     
-        ///     avro.serializer.buffer.bytes (default: 128) - Initial size (in bytes) of the buffer 
-        ///         used for message serialization. Use a value high enough to avoid resizing 
-        ///         the buffer, but small enough to avoid excessive memory use. Inspect the size of 
-        ///         the byte array returned by the Serialize method to estimate an appropriate value. 
-        ///         Note: each call to serialize creates a new buffer.
-        ///     
-        ///     avro.serializer.auto.register.schemas (default: true) - true if the serializer should 
-        ///         attempt to auto-register unrecognized schemas with Confluent Schema Registry, 
-        ///         false if not.
-        /// </summary>
-        /// <remarks>
-        ///     An instance of CachedSchemaRegistryClient will be created and managed 
-        ///     internally based on configuration properties extracted from the collection
-        ///     passed into the Producer constructor.
-        /// </remarks>
-        public AvroSerializer()
-        {
-            disposeClientOnDispose = true;
-        }
 
         /// <summary>
         ///     Initiliaze a new instance of the AvroSerializer class.
@@ -110,7 +73,6 @@ namespace Confluent.Kafka.Serialization
         /// </param>
         public AvroSerializer(ISchemaRegistryClient schemaRegistryClient)
         {
-            disposeClientOnDispose = false;
             this.schemaRegistryClient = schemaRegistryClient;
         }
 
@@ -141,81 +103,33 @@ namespace Confluent.Kafka.Serialization
             return serializerImpl.Serialize(topic, data);
         }
 
-
         /// <summary>
-        ///     Refer to <see cref="Confluent.Kafka.Serialization.IDeserializer{T}.Configure(IEnumerable{KeyValuePair{string, object}}, bool)" />
+        ///     Configure the serializer.
         /// </summary>
-        public IEnumerable<KeyValuePair<string, object>> Configure(IEnumerable<KeyValuePair<string, object>> config, bool isKey)
+        public IEnumerable<KeyValuePair<string, string>> Configure(IEnumerable<KeyValuePair<string, string>> config, bool isKey)
         {
             var keyOrValue = isKey ? "Key" : "Value";
-            var srConfig = config.Where(item => item.Key.StartsWith("schema.registry."));
             var avroConfig = config.Where(item => item.Key.StartsWith("avro."));
             this.isKeySerializer = isKey;
 
             if (avroConfig.Count() != 0)
             {
-                int? initialBufferSize = (int?)Utils.ExtractPropertyValue(config, isKey, ConfigPropertyNames.AvroSerializerBufferBytes, "AvroSerializer", typeof(int));
+                int? initialBufferSize = (int?)Utils.ExtractPropertyValue(config, isKey, AvroSerdeProviderConfig.PropertyNames.AvroSerializerBufferBytes, "AvroSerializer", typeof(int));
                 if (initialBufferSize != null) { this.initialBufferSize = initialBufferSize.Value; }
 
-                bool? autoRegisterSchema = (bool?)Utils.ExtractPropertyValue(config, isKey, ConfigPropertyNames.AvroSerializerAutoRegisterSchemas, "AvroSerializer", typeof(bool));
+                bool? autoRegisterSchema = (bool?)Utils.ExtractPropertyValue(config, isKey, AvroSerdeProviderConfig.PropertyNames.AvroSerializerAutoRegisterSchemas, "AvroSerializer", typeof(bool));
                 if (autoRegisterSchema != null) { this.autoRegisterSchema = autoRegisterSchema.Value; }
 
                 foreach (var property in avroConfig)
                 {
-                    if (property.Key != ConfigPropertyNames.AvroSerializerAutoRegisterSchemas && property.Key != ConfigPropertyNames.AvroSerializerBufferBytes)
+                    if (property.Key != AvroSerdeProviderConfig.PropertyNames.AvroSerializerAutoRegisterSchemas && property.Key != AvroSerdeProviderConfig.PropertyNames.AvroSerializerBufferBytes)
                     {
                         throw new ArgumentException($"{keyOrValue} AvroSerializer: unexpected configuration parameter {property.Key}");
                     }
                 }
             }
 
-            if (srConfig.Count() != 0)
-            {
-                if (schemaRegistryClient != null)
-                {
-                    throw new ArgumentException($"{keyOrValue} AvroSerializer schema registry client was configured via both the constructor and configuration parameters.");
-                }
- 
-                disposeClientOnDispose = true;
-                schemaRegistryClient = new CachedSchemaRegistryClient(config);
-            }
-
-            if (schemaRegistryClient == null)
-            {
-                throw new ArgumentException($"{keyOrValue} AvroSerializer schema registry client was not supplied or configured.");
-            }
-
-            return config.Where(item => !item.Key.StartsWith("schema.registry.") && !item.Key.StartsWith("avro."));
+            return config.Where(item => !item.Key.StartsWith("avro."));
         }
-
-        /// <summary>
-        ///     Releases any unmanaged resources owned by the serializer.
-        /// </summary>
-        public void Dispose() 
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
-
-
-        /// <summary>
-        ///     Releases the unmanaged resources used by this object
-        ///     and optionally disposes the managed resources.
-        /// </summary>
-        /// <param name="disposing">
-        ///     true to release both managed and unmanaged resources;
-        ///     false to release only unmanaged resources.
-        /// </param>
-        protected virtual void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                if (disposeClientOnDispose)
-                {
-                    schemaRegistryClient.Dispose();
-                }
-            }
-        }
-
     }
 }

@@ -19,7 +19,6 @@
 using System;
 using System.Collections.Generic;
 using Xunit;
-using Confluent.Kafka.Serialization;
 
 
 namespace Confluent.Kafka.IntegrationTests
@@ -37,13 +36,13 @@ namespace Confluent.Kafka.IntegrationTests
             byte[] TestKey = new byte[] { 1, 2, 3, 4 };
             byte[] TestValue = new byte[] { 5, 6, 7, 8 };
 
-            var producerConfig = new Dictionary<string, object> 
+            var producerConfig = new ProducerConfig
             { 
-                { "bootstrap.servers", bootstrapServers },
-                { "dotnet.producer.delivery.report.fields", "none" }
+                BootstrapServers = bootstrapServers,
+                DeliveryReportFields = "none"
             };
 
-            using (var producer = new Producer<byte[], byte[]>(producerConfig, new ByteArraySerializer(), new ByteArraySerializer()))
+            using (var producer = new Producer<byte[], byte[]>(producerConfig))
             {
                 var dr = await producer.ProduceAsync(
                     singlePartitionTopic, 

@@ -15,7 +15,6 @@ using System;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Collections.Generic;
-using Confluent.Kafka.Serialization;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 using System.Threading;
@@ -158,7 +157,8 @@ namespace Confluent.Kafka.VerifiableClient
         public VerifiableProducer(VerifiableProducerConfig clientConfig)
         {
             Config = clientConfig;
-            Handle = new Producer<Null, string>(Config.Conf, new NullSerializer(), new StringSerializer(Encoding.UTF8));
+            var producerConfig = new ProducerConfig(Config.Conf.ToDictionary(a => a.Key, a => a.Value.ToString()));
+            Handle = new Producer<Null, string>(producerConfig);
             ProduceLock = new object();
             Dbg("Created producer " + Handle.Name);
         }
@@ -316,7 +316,8 @@ namespace Confluent.Kafka.VerifiableClient
         {
             Config = clientConfig;
             Config.Conf["enable.auto.commit"] = Config.AutoCommit;
-            consumer = new Consumer<Null, string>(Config.Conf, new NullDeserializer(), new StringDeserializer(Encoding.UTF8));
+            var consumerConfig = new ConsumerConfig(Config.Conf.ToDictionary(a => a.Key, a => a.Value.ToString()));
+            consumer = new Consumer<Null, string>(consumerConfig);
             consumedMsgsAtLastCommit = 0;
             Dbg($"Created Consumer {consumer.Name} with AutoCommit={Config.AutoCommit}");
         }

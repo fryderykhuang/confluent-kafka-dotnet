@@ -22,7 +22,6 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using Confluent.Kafka;
-using Confluent.Kafka.Serialization;
 
 
 namespace Confluent.Kafka.Examples.Producer
@@ -40,9 +39,9 @@ namespace Confluent.Kafka.Examples.Producer
             string brokerList = args[0];
             string topicName = args[1];
 
-            var config = new Dictionary<string, object> { { "bootstrap.servers", brokerList } };
+            var config = new ProducerConfig { BootstrapServers = brokerList };
 
-            using (var producer = new Producer<string, string>(config, new StringSerializer(Encoding.UTF8), new StringSerializer(Encoding.UTF8)))
+            using (var producer = new Producer<string, string>(config))
             {
                 Console.WriteLine("\n-----------------------------------------------------------------------");
                 Console.WriteLine($"Producer {producer.Name} producing on topic {topicName}.");

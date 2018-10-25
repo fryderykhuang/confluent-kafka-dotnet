@@ -35,10 +35,7 @@ namespace Confluent.Kafka.IntegrationTests
         {
             LogToFile("start Producer_Produce_Null_DeliveryHandler");
 
-            var producerConfig = new Dictionary<string, object> 
-            { 
-                { "bootstrap.servers", bootstrapServers }
-            };
+            var producerConfig = new ProducerConfig { BootstrapServers = bootstrapServers };
 
             int count = 0;
             Action<DeliveryReportResult<Null, Null>> dh = (DeliveryReportResult<Null, Null> dr) => 
@@ -51,10 +48,10 @@ namespace Confluent.Kafka.IntegrationTests
                 Assert.Null(dr.Message.Value);
                 Assert.Equal(TimestampType.CreateTime, dr.Message.Timestamp.Type);
                 Assert.True(Math.Abs((DateTime.UtcNow - dr.Message.Timestamp.UtcDateTime).TotalMinutes) < 1.0);
-                count += 1;  
+                count += 1;
             };
 
-            using (var producer = new Producer<Null, Null>(producerConfig, null, null))
+            using (var producer = new Producer<Null, Null>(producerConfig))
             {
                 producer.BeginProduce(new TopicPartition(singlePartitionTopic, 0), new Message<Null, Null> {}, dh);
                 producer.BeginProduce(singlePartitionTopic, new Message<Null, Null> {}, dh);
