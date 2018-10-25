@@ -41,7 +41,7 @@ namespace Confluent.Kafka
     /// <returns>
     ///     The serialized value.
     /// </returns>
-    public delegate byte[] Serializer<T>(string topic, T data);
+    public delegate ReadOnlySpan<byte> Serializer<T>(string topic, T data);
 
     /// <summary>
     ///     A generator for <see cref="Confluent.Kafka.Serializer{T}" /> instances.

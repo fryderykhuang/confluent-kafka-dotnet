@@ -623,7 +623,7 @@ namespace Confluent.Kafka
                 {
                     unsafe
                     {
-                        key = this.KeyDeserializer.Deserialize(
+                        key = this.KeyDeserializer(
                             topic,
                             msg.key == IntPtr.Zero ? EmptyBytes : new ReadOnlySpan<byte>(msg.key.ToPointer(), (int)msg.key_len),
                             msg.key == IntPtr.Zero
@@ -653,7 +653,7 @@ namespace Confluent.Kafka
                 {
                     unsafe
                     {
-                        val = this.ValueDeserializer.Deserialize(
+                        val = this.ValueDeserializer(
                             topic,
                             msg.val == IntPtr.Zero ? EmptyBytes : new ReadOnlySpan<byte>(msg.val.ToPointer(), (int)msg.len),
                             msg.val == IntPtr.Zero);

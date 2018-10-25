@@ -39,7 +39,7 @@ namespace Confluent.Kafka
         /// <returns>
         ///     The <see cref="System.Int64"/> value <paramref name="data" /> encoded as a byte array of length 8 (network byte order).
         /// </returns>
-        public static byte[] Long(string topic, long data)
+        public static ReadOnlySpan<byte> Long(string topic, long data)
         {
             var result = new byte[8];
             result[0] = (byte)(data >> 56);
@@ -65,7 +65,7 @@ namespace Confluent.Kafka
         /// <returns>
         ///     The <see cref="System.Int32"/> value <paramref name="data" /> encoded as a byte array of length 4 (network byte order).
         /// </returns>
-        public static byte[] Int32(string topic, int data)
+        public static ReadOnlySpan<byte> Int32(string topic, int data)
         {
             var result = new byte[4]; // int is always 32 bits on .NET.
             // network byte order -> big endian -> most significant byte in the smallest address.
@@ -91,7 +91,7 @@ namespace Confluent.Kafka
         /// <returns>
         ///     The System.Single value <paramref name="data" /> encoded as a byte array of length 4 (network byte order).
         /// </returns>
-        public static byte[] Float(string topic, float data)
+        public static ReadOnlySpan<byte> Float(string topic, float data)
         {
             if (BitConverter.IsLittleEndian)
             {
@@ -124,7 +124,7 @@ namespace Confluent.Kafka
         /// <returns>
         ///     The System.Double value <paramref name="data" /> encoded as a byte array of length 4 (network byte order).
         /// </returns>
-        public static byte[] Double(string topic, double data)
+        public static ReadOnlySpan<byte> Double(string topic, double data)
         {
             if (BitConverter.IsLittleEndian)
             {
