@@ -730,6 +730,30 @@ namespace Confluent.Kafka
                     deliveryHandler)
             );
         }
+
+
+        public void BeginProduce(string topic, TKey key, TValue value, Timestamp timestamp = new Timestamp(), Headers headers = null)
+        {
+            var keyBytes = keySerializer(topic, key);
+            var valBytes = valueSerializer(topic, value);
+
+            producer.ProduceImpl(
+                topic,
+                valBytes,
+                keyBytes,
+                timestamp, Partition.Any,
+                headers, null);
+        }
+
+        public void BeginProduce(string topic, ReadOnlySpan<byte> keyBytes, ReadOnlySpan<byte> valBytes)
+        {
+            producer.ProduceImpl(
+                topic,
+                valBytes,
+                keyBytes,
+                Timestamp.Default, Partition.Any,
+                null, null);
+        }
     }
 
 

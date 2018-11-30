@@ -62,6 +62,10 @@ namespace Confluent.Kafka
         /// </summary>
         void BeginProduce(TopicPartition topicPartition, Message<TKey, TValue> message, Action<DeliveryReportResult<TKey, TValue>> deliveryHandler);
 
+        void BeginProduce(string topic, TKey key, TValue value, Timestamp timestamp = new Timestamp(), Headers headers = null);
+
+        void BeginProduce(string topic, ReadOnlySpan<byte> keyBytes, ReadOnlySpan<byte> valBytes);
+
 
         /// <summary>
         ///     Refer to <see cref="Confluent.Kafka.Producer{TKey, TValue}.Poll(TimeSpan)" />
