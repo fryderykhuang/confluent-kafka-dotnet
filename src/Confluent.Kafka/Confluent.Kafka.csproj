@@ -18,11 +18,11 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <LangVersion>7.3</LangVersion>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Version>1.0-beta2-flexem01</Version>
+    <Version>1.0-flexem10</Version>
   </PropertyGroup>
 
   <ItemGroup>		
-    <PackageReference Include="librdkafka.redist" Version="1.0.0-PRE1" />
+    <PackageReference Include="librdkafka.redist" Version="0.11.6" />
     <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="4.5.0" />
     <PackageReference Include="System.Memory" Version="4.5.0" />
   </ItemGroup>
