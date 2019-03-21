@@ -51,9 +51,9 @@ namespace Confluent.Kafka
 
 
         /// <summary>
-        ///     Refer to <see cref="Confluent.Kafka.Consumer{TKey, TValue}.OnPartitionsAssigned" />
+        ///     Refer to <see cref="Consumer{TKey,TValue}.OnPartitionsAssigning" />
         /// </summary>
-        event EventHandler<List<TopicPartition>> OnPartitionsAssigned;
+        event EventHandler<List<TopicPartition>> OnPartitionsAssigning;
 
 
         /// <summary>

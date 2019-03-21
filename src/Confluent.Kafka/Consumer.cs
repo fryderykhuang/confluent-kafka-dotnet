@@ -116,7 +116,8 @@ namespace Confluent.Kafka
             IntPtr partitions,
             IntPtr opaque)
         {
-            var partitionList = SafeKafkaHandle.GetTopicPartitionOffsetErrorList(partitions).Select(p => p.TopicPartition).ToList();
+            var partitionList = SafeKafkaHandle.GetTopicPartitionOffsetErrorList(partitions)
+                .Select(p => p.TopicPartition).ToList();
 
             // Ensure registered handlers are never called as a side-effect of Dispose/Finalize (prevents deadlocks in common scenarios).
             if (kafkaHandle.IsClosed)
@@ -129,7 +130,7 @@ namespace Confluent.Kafka
 
             if (err == ErrorCode.Local_AssignPartitions)
             {
-                var handler = OnPartitionsAssigned;
+                var handler = OnPartitionsAssigning;
                 if (handler != null && handler.GetInvocationList().Length > 0)
                 {
                     assignCallCount = 0;
@@ -140,6 +141,7 @@ namespace Confluent.Kafka
                         throw new InvalidOperationException($"Assign/Unassign was called {assignCallCount} times after OnPartitionsAssigned was raised. It must be called at most once.");
                     }
                 }
+
                 Assign(partitionList.Select(p => new TopicPartitionOffset(p, Offset.Invalid)));
             }
             else if (err == ErrorCode.Local_RevokePartitions)
@@ -757,7 +759,7 @@ namespace Confluent.Kafka
         ///     <see cref="Confluent.Kafka.Consumer{TKey, TValue}.Consume(CancellationToken)" />
         ///     (on the same thread).
         /// </remarks>
-        public event EventHandler<List<TopicPartition>> OnPartitionsAssigned;
+        public event EventHandler<List<TopicPartition>> OnPartitionsAssigning;
 
 
         /// <summary>

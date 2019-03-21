@@ -64,7 +64,11 @@ namespace Confluent.Kafka
 
         void BeginProduce(string topic, TKey key, TValue value, Timestamp timestamp = new Timestamp(), Headers headers = null);
 
-        void BeginProduce(string topic, ReadOnlySpan<byte> keyBytes, ReadOnlySpan<byte> valBytes);
+        void BeginProduce(string topic, TKey key, TValue value, long userState, Timestamp timestamp = new Timestamp(), Headers headers = null);
+
+        void BeginProduce(string topic, ReadOnlySpan<byte> keyBytes, ReadOnlySpan<byte> valBytes, Timestamp timestamp = new Timestamp());
+
+        void BeginProduce(string topic, ReadOnlySpan<byte> keyBytes, ReadOnlySpan<byte> valBytes, long userState, Timestamp timestamp = new Timestamp());
 
 
         /// <summary>

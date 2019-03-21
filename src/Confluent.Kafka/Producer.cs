@@ -54,6 +54,8 @@ namespace Confluent.Kafka
     /// </returns>
     public delegate Serializer<T> SerializerGenerator<T>(bool forKey);
 
+    public delegate void DeliveryReportReceivedDelegate(ref rd_kafka_message msg);
+
     /// <summary>
     ///     Implements a high-level Apache Kafka producer with key
     ///     and value serialization.
@@ -226,6 +228,7 @@ namespace Confluent.Kafka
             this.ownedClient = null;
             this.handle = handle;
             this.producer = (Producer)handle.Owner;
+
             setAndValidateSerializers(
                 keySerializerGenerator == null ? null : keySerializerGenerator(true),
                 valueSerializerGenerator == null ? null : valueSerializerGenerator(false));
@@ -400,6 +403,13 @@ namespace Confluent.Kafka
             add { handle.Owner.OnError += value; }
             remove { handle.Owner.OnError -= value; }
             }
+
+        public event DeliveryReportReceivedDelegate DeliveryReportReceived
+        {
+            add => ((Producer) handle.Owner).DeliveryReportReceived += value;
+            remove => ((Producer) handle.Owner).DeliveryReportReceived -= value;
+        }
+
 
         /// <summary>
         ///     Refer to <see cref="Confluent.Kafka.IClient.AddBrokers(string)" />
@@ -731,7 +741,6 @@ namespace Confluent.Kafka
             );
         }
 
-
         public void BeginProduce(string topic, TKey key, TValue value, Timestamp timestamp = new Timestamp(), Headers headers = null)
         {
             var keyBytes = keySerializer(topic, key);
@@ -745,14 +754,38 @@ namespace Confluent.Kafka
                 headers, null);
         }
 
-        public void BeginProduce(string topic, ReadOnlySpan<byte> keyBytes, ReadOnlySpan<byte> valBytes)
+        public void BeginProduce(string topic, TKey key, TValue value, long userState, Timestamp timestamp = new Timestamp(), Headers headers = null)
+        {
+            var keyBytes = keySerializer(topic, key);
+            var valBytes = valueSerializer(topic, value);
+
+            producer.ProduceImpl(
+                topic,
+                valBytes,
+                keyBytes,
+                timestamp, Partition.Any,
+                headers, userState);
+        }
+
+        public void BeginProduce(string topic, ReadOnlySpan<byte> keyBytes, ReadOnlySpan<byte> valBytes, Timestamp timestamp)
         {
             producer.ProduceImpl(
                 topic,
                 valBytes,
                 keyBytes,
-                Timestamp.Default, Partition.Any,
+                timestamp, Partition.Any,
                 null, null);
+        }
+
+        public void BeginProduce(string topic, ReadOnlySpan<byte> keyBytes, ReadOnlySpan<byte> valBytes, long userState,
+            Timestamp timestamp)
+        {
+            producer.ProduceImpl(
+                topic,
+                valBytes,
+                keyBytes,
+                timestamp, Partition.Any,
+                null, userState);
         }
     }
 
@@ -761,7 +794,7 @@ namespace Confluent.Kafka
     /// <summary>
     ///     A high-level Apache Kafka producer (without serialization).
     /// </summary>
-    internal class Producer : IClient
+    public class Producer : IClient
     {
         internal class UntypedDeliveryReport
         {
@@ -883,6 +916,9 @@ namespace Confluent.Kafka
 
         private Librdkafka.DeliveryReportDelegate DeliveryReportCallback;
 
+        public DeliveryReportReceivedDelegate DeliveryReportReceived;
+        private bool _deliveryReportAsUserState;
+
         /// <remarks>
         ///     note: this property is set to that defined in rd_kafka_conf
         ///     (which is never used by confluent-kafka-dotnet).
@@ -893,6 +929,13 @@ namespace Confluent.Kafka
             if (kafkaHandle.IsClosed) { return; }
 
             var msg = Util.Marshal.PtrToStructureUnsafe<rd_kafka_message>(rkmessage);
+
+            DeliveryReportReceived?.Invoke(ref msg);
+
+            if (_deliveryReportAsUserState)
+            {
+                return;
+            }
 
             // the msg._private property has dual purpose. Here, it is an opaque pointer set
             // by Topic.Produce to be an IDeliveryHandler. When Consuming, it's for internal
@@ -942,12 +985,12 @@ namespace Confluent.Kafka
             }
 
             deliveryHandler.HandleDeliveryReport(
-                new UntypedDeliveryReport 
+                new UntypedDeliveryReport
                 {
                     // Topic is not set here in order to avoid the marshalling cost.
                     // Instead, the delivery handler is expected to cache the topic string.
-                    Partition = msg.partition, 
-                    Offset = msg.offset, 
+                    Partition = msg.partition,
+                    Offset = msg.offset,
                     Error = msg.err,
                     Message = new Message { Timestamp = new Timestamp(timestamp, (TimestampType)timestampType), Headers = headers }
                 }
@@ -973,6 +1016,9 @@ namespace Confluent.Kafka
 
             if (this.enableDeliveryReports && deliveryHandler != null)
             {
+                if (_deliveryReportAsUserState)
+                    throw new InvalidOperationException(
+                        "Delivery handler mechanism has been disabled by the use of user state.");
                 // Passes the TaskCompletionSource to the delivery report callback via the msg_opaque pointer
 
                 // Note: There is a level of indirection between the GCHandle and
@@ -1014,6 +1060,47 @@ namespace Confluent.Kafka
                 }
             }
         }
+
+        internal void ProduceImpl(
+            string topic,
+            ReadOnlySpan<byte> val,
+            ReadOnlySpan<byte> key,
+            Timestamp timestamp,
+            Partition partition,
+            IEnumerable<Header> headers, long userState)
+        {
+            if (!_deliveryReportAsUserState)
+                throw new InvalidOperationException($"{ConfigPropertyNames.ProducerDeliveryReportAsUserState} not enabled.");
+            if (timestamp.Type != TimestampType.CreateTime)
+            {
+                if (timestamp != Timestamp.Default)
+                {
+                    throw new ArgumentException("Timestamp must be either Timestamp.Default, or timestamp type must equal CreateTime.");
+                }
+            }
+
+            if (this.enableDeliveryReports)
+            {
+                var err = kafkaHandle.Produce(
+                    topic,
+                    val,
+                    key,
+                    partition.Value,
+                    timestamp.UnixTimestampMs,
+                    headers,
+                    new IntPtr(userState));
+
+                if (err != ErrorCode.NoError)
+                {
+                    throw new KafkaException(err);
+                }
+            }
+            else
+            {
+                throw new InvalidOperationException("Delivery report is not enabled from configuration.");
+            }
+        }
+
 
 
         /// <summary>
@@ -1099,6 +1186,13 @@ namespace Confluent.Kafka
                         }
                     }
                 }
+            }
+
+
+            var deliveryReportAsUserStateObj = config.FirstOrDefault(prop => prop.Key == ConfigPropertyNames.ProducerDeliveryReportAsUserState).Value;
+            if (deliveryReportAsUserStateObj != null)
+            {
+                _deliveryReportAsUserState = Convert.ToBoolean(deliveryReportAsUserStateObj);
             }
 
             // Note: changing the default value of produce.offset.report at the binding level is less than

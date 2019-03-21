@@ -38,7 +38,7 @@ namespace Confluent.Kafka.Impl
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    struct rd_kafka_message
+    public struct rd_kafka_message
     {
         internal ErrorCode err;                       /* Non-zero for error signaling. */
         internal /* rd_kafka_topic_t * */ IntPtr rkt; /* Topic */
@@ -63,6 +63,13 @@ namespace Confluent.Kafka.Impl
                                                        *   rdkafka private pointer: DO NOT MODIFY
                                                        * dr_msg_cb:
                                                        *   mgs_opaque from produce() call */
+
+        public int Partition => partition;
+        public long Offset => offset;
+        public ErrorCode Error => err;
+        public ulong KeyLength => key_len.ToUInt64();
+        public ulong ValueLength => len.ToUInt64();
+        public long UserState => _private.ToInt64();
     }
 
     [StructLayout(LayoutKind.Sequential)]

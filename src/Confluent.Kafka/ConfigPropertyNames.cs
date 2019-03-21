@@ -52,5 +52,6 @@ namespace Confluent.Kafka
         /// </summary>
         public const string ConsumerConsumeResultFields = "dotnet.consumer.consume.result.fields";
 
+        public const string ProducerDeliveryReportAsUserState = "dotnet.producer.delivery.report.as.user.state";
     }
 }
