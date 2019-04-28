@@ -22,7 +22,7 @@ using Confluent.Kafka.Impl;
 namespace Confluent.Kafka
 {
     /// <summary>
-    ///     A builder class for <see cref="Producer{TKey, TValue}" /> instances.
+    ///     A builder class for <see cref="IProducer{TKey,TValue}" />.
     /// </summary>
     public class ProducerBuilder<TKey, TValue>
     {
@@ -36,17 +36,17 @@ namespace Confluent.Kafka
         /// <summary>
         ///     The configured error handler.
         /// </summary>
-        internal protected Action<Producer<TKey, TValue>, Error> ErrorHandler { get; set; }
+        internal protected Action<IProducer<TKey, TValue>, Error> ErrorHandler { get; set; }
 
         /// <summary>
         ///     The configured log handler.
         /// </summary>
-        internal protected Action<Producer<TKey, TValue>, LogMessage> LogHandler { get; set; }
+        internal protected Action<IProducer<TKey, TValue>, LogMessage> LogHandler { get; set; }
 
         /// <summary>
         ///     The configured statistics handler.
         /// </summary>
-        internal protected Action<Producer<TKey, TValue>, string> StatisticsHandler { get; set; }
+        internal protected Action<IProducer<TKey, TValue>, string> StatisticsHandler { get; set; }
 
         internal protected DeliveryReportReceivedDelegate DeliveryReportReceivedHandler { get; set; }
         
@@ -54,12 +54,12 @@ namespace Confluent.Kafka
         /// <summary>
         ///     The configured key serializer.
         /// </summary>
-        internal protected Serializer<TKey> KeySerializer { get; set; }
+        internal protected ISerializer<TKey> KeySerializer { get; set; }
 
         /// <summary>
         ///     The configured value serializer.
         /// </summary>
-        internal protected Serializer<TValue> ValueSerializer { get; set; }
+        internal protected ISerializer<TValue> ValueSerializer { get; set; }
 
         /// <summary>
         ///     The configured async key serializer.
@@ -116,7 +116,7 @@ namespace Confluent.Kafka
         ///     Executes on the poll thread (by default, a background thread managed by
         ///     the producer).
         /// </remarks>
-        public ProducerBuilder<TKey, TValue> SetStatisticsHandler(Action<Producer<TKey, TValue>, string> statisticsHandler)
+        public ProducerBuilder<TKey, TValue> SetStatisticsHandler(Action<IProducer<TKey, TValue>, string> statisticsHandler)
         {
             if (this.StatisticsHandler != null)
             {
@@ -136,7 +136,7 @@ namespace Confluent.Kafka
         ///     Executes on the poll thread (by default, a background thread managed by
         ///     the producer).
         /// </remarks>
-        public ProducerBuilder<TKey, TValue> SetErrorHandler(Action<Producer<TKey, TValue>, Error> errorHandler)
+        public ProducerBuilder<TKey, TValue> SetErrorHandler(Action<IProducer<TKey, TValue>, Error> errorHandler)
         {
             if (this.ErrorHandler != null)
             {
@@ -162,7 +162,7 @@ namespace Confluent.Kafka
         ///     Confluent.Kafka APIs from within a log handler or perform any
         ///     prolonged operations.
         /// </remarks>
-        public ProducerBuilder<TKey, TValue> SetLogHandler(Action<Producer<TKey, TValue>, LogMessage> logHandler)
+        public ProducerBuilder<TKey, TValue> SetLogHandler(Action<IProducer<TKey, TValue>, LogMessage> logHandler)
         {
             if (this.LogHandler != null)
             {
@@ -185,7 +185,7 @@ namespace Confluent.Kafka
         /// <summary>
         ///     The serializer to use to serialize keys.
         /// </summary>
-        public ProducerBuilder<TKey, TValue> SetKeySerializer(Serializer<TKey> serializer)
+        public ProducerBuilder<TKey, TValue> SetKeySerializer(ISerializer<TKey> serializer)
         {
             if (this.KeySerializer != null || this.AsyncKeySerializer != null)
             {
@@ -198,7 +198,7 @@ namespace Confluent.Kafka
         /// <summary>
         ///     The serializer to use to serialize values.
         /// </summary>
-        public ProducerBuilder<TKey, TValue> SetValueSerializer(Serializer<TValue> serializer)
+        public ProducerBuilder<TKey, TValue> SetValueSerializer(ISerializer<TValue> serializer)
         {
             if (this.ValueSerializer != null || this.AsyncValueSerializer != null)
             {
@@ -235,7 +235,7 @@ namespace Confluent.Kafka
         }
 
         /// <summary>
-        ///     Build a new Producer instance.
+        ///     Build a new IProducer implementation instance.
         /// </summary>
         public virtual IProducer<TKey, TValue> Build()
         {

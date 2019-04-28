@@ -18,6 +18,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Confluent.Kafka.SyncOverAsync;
 using Confluent.SchemaRegistry;
 using Confluent.SchemaRegistry.Serdes;
 
@@ -80,8 +81,8 @@ namespace Confluent.Kafka.Examples.AvroSpecific
                 using (var schemaRegistry = new CachedSchemaRegistryClient(schemaRegistryConfig))
                 using (var consumer =
                     new ConsumerBuilder<string, User>(consumerConfig)
-                        .SetKeyDeserializer(new AvroDeserializer<string>(schemaRegistry))
-                        .SetValueDeserializer(new AvroDeserializer<User>(schemaRegistry))
+                        .SetKeyDeserializer(new AvroDeserializer<string>(schemaRegistry).AsSyncOverAsync())
+                        .SetValueDeserializer(new AvroDeserializer<User>(schemaRegistry).AsSyncOverAsync())
                         .SetErrorHandler((_, e) => Console.WriteLine($"Error: {e.Reason}"))
                         .Build())
                 {
@@ -95,7 +96,7 @@ namespace Confluent.Kafka.Examples.AvroSpecific
                             {
                                 var consumeResult = consumer.Consume(cts.Token);
 
-                                Console.WriteLine($"user key name: {consumeResult.Message.Key}, user value favorite color: {consumeResult.Value.favorite_color}");
+                                Console.WriteLine($"user name: {consumeResult.Message.Key}, favorite color: {consumeResult.Value.favorite_color}");
                             }
                             catch (ConsumeException e)
                             {

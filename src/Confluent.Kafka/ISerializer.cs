@@ -14,23 +14,28 @@
 //
 // Refer to LICENSE for more information.
 
+using System;
 
-namespace Confluent.SchemaRegistry.Serdes
+namespace Confluent.Kafka
 {
     /// <summary>
-    ///     Enumeration of serde types recognised by the 
-    ///     Avro ProduceAsync and Produce methods.
+    ///     Defines a serializer for use with <see cref="Confluent.Kafka.Producer{TKey,TValue}" />.
     /// </summary>
-    public enum SerdeType
+    public interface ISerializer<T>
     {
         /// <summary>
-        ///     Use the regular serializer.
+        ///     Serialize the key or value of a <see cref="Message{TKey,TValue}" />
+        ///     instance.
         /// </summary>
-        Regular = 1,
-
-        /// <summary>
-        ///     Use the Avro serializer.
-        /// </summary>
-        Avro = 2
-    }
+    /// <param name="data">
+    ///     The value to serialize.
+    /// </param>
+        /// <param name="context">
+        ///     Context relevant to the serialize operation.
+        /// </param>
+    /// <returns>
+    ///     The serialized value.
+    /// </returns>
+    public delegate ReadOnlySpan<byte> Serializer<T>(T data, SerializationContext context);
+}
 }

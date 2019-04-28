@@ -14,18 +14,28 @@
 //
 // Refer to LICENSE for more information.
 
-using System;
 
 namespace Confluent.Kafka
 {
     /// <summary>
-    ///     Defines a serializer for use with <see cref="Confluent.Kafka.Producer{TKey,TValue}" />.
+    ///     Enumerates different log level enumerations.
     /// </summary>
-    /// <param name="data">
-    ///     The value to serialize.
-    /// </param>
-    /// <returns>
-    ///     The serialized value.
-    /// </returns>
-    public delegate ReadOnlySpan<byte> Serializer<T>(T data);
+    public enum LogLevelType
+    {
+        /// <summary>
+        ///     Confluent.Kafka.SysLogLevel (severity
+        ///     levels correspond to syslog)
+        /// </summary>
+        SysLogLevel = 1,
+
+        /// <summary>
+        ///     Microsoft.Extensions.Logging.LogLevel
+        /// </summary>
+        MicrosoftExtensionsLogging = 2,
+
+        /// <summary>
+        ///     System.Diagnostics.TraceLevel
+        /// </summary>
+        SystemDiagnostics = 3
+    }
 }

@@ -18,6 +18,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Confluent.Kafka;
+using Confluent.Kafka.SyncOverAsync;
 using Confluent.SchemaRegistry;
 using Confluent.SchemaRegistry.Serdes;
 using Confluent.Kafka.Examples.AvroSpecific;
@@ -67,7 +68,7 @@ namespace Confluent.SchemaRegistry.Serdes.IntegrationTests
                 using (var consumer =
                     new ConsumerBuilder<Null, User>(consumerConfig)
                         .SetKeyDeserializer(Deserializers.Null)
-                        .SetValueDeserializer(new AvroDeserializer<User>(schemaRegistry))
+                        .SetValueDeserializer(new AvroDeserializer<User>(schemaRegistry).AsSyncOverAsync())
                         .SetPartitionsAssignedHandler((c, partitions)
                             => partitions.Select(tp => new TopicPartitionOffset(tp, Offset.Beginning)))
                         .Build())
@@ -96,7 +97,7 @@ namespace Confluent.SchemaRegistry.Serdes.IntegrationTests
                 using (var consumer =
                     new ConsumerBuilder<Null, User>(consumerConfig)
                         .SetKeyDeserializer(Deserializers.Null)
-                        .SetValueDeserializer(new AvroDeserializer<User>(schemaRegistry))
+                        .SetValueDeserializer(new AvroDeserializer<User>(schemaRegistry).AsSyncOverAsync())
                         .SetPartitionsAssignedHandler((c, partitions)
                             => partitions.Select(tp => new TopicPartitionOffset(tp, Offset.Beginning)))
                         .Build())
