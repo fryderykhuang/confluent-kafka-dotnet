@@ -16,16 +16,13 @@
 //
 // Refer to LICENSE for more information.
 
+using Confluent.Kafka.Admin;
+using Confluent.Kafka.Internal;
 using System;
 using System.Collections.Generic;
-using System.Collections.Concurrent;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading.Tasks;
-using Confluent.Kafka;
-using Confluent.Kafka.Admin;
-using Confluent.Kafka.Internal;
 
 namespace Confluent.Kafka.Impl
 {
@@ -36,18 +33,18 @@ namespace Confluent.Kafka.Impl
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    struct rd_kafka_message
+    public struct rd_kafka_message
     {
-        internal ErrorCode err;                       /* Non-zero for error signaling. */
-        internal /* rd_kafka_topic_t * */ IntPtr rkt; /* Topic */
-        internal int partition;                       /* Partition */
-        internal /* void   * */ IntPtr val;           /* err==0: Message val
+        public ErrorCode err;                       /* Non-zero for error signaling. */
+        public /* rd_kafka_topic_t * */ IntPtr rkt; /* Topic */
+        public int partition;                       /* Partition */
+        public /* void   * */ IntPtr val;           /* err==0: Message val
                                                        * err!=0: Error string */
-        internal UIntPtr  len;                        /* err==0: Message val length
+        public UIntPtr  len;                        /* err==0: Message val length
                                                        * err!=0: Error string length */
-        internal /* void   * */ IntPtr key;           /* err==0: Optional message key */
-        internal UIntPtr  key_len;                    /* err==0: Optional message key length */
-        internal long offset;                         /* Consume:
+        public /* void   * */ IntPtr key;           /* err==0: Optional message key */
+        public UIntPtr  key_len;                    /* err==0: Optional message key length */
+        public long offset;                         /* Consume:
                                                        *   Message offset (or offset for error
                                                        *   if err!=0 if applicable).
                                                        * dr_msg_cb:
@@ -57,7 +54,7 @@ namespace Confluent.Kafka.Impl
                                                        *   otherwise only the last message in
                                                        *   each produced internal batch will
                                                        *   have this field set, otherwise 0. */
-        internal /* void  * */ IntPtr _private;       /* Consume:
+        public /* void  * */ IntPtr _private;       /* Consume:
                                                        *   rdkafka private pointer: DO NOT MODIFY
                                                        * dr_msg_cb:
                                                        *   mgs_opaque from produce() call */
@@ -408,6 +405,56 @@ namespace Confluent.Kafka.Impl
                 }
             }
         }
+
+        internal unsafe ErrorCode Produce(
+            string topic,
+            ReadOnlySpan<byte> val,
+            ReadOnlySpan<byte> key,
+            int partition,
+            long timestamp,
+            IEnumerable<IHeader> headers,
+            IntPtr opaque)
+        {
+            fixed (byte* valPtr = val)
+            fixed (byte* keyPtr = key)
+            {
+                IntPtr headersPtr = marshalHeaders(headers);
+
+                try
+                {
+                    var errorCode = Librdkafka.producev(
+                        handle,
+                        topic,
+                        partition,
+                        (IntPtr) MsgFlags.MSG_F_COPY,
+                        (IntPtr) valPtr, (UIntPtr) val.Length,
+                        (IntPtr) keyPtr, (UIntPtr) key.Length,
+                        timestamp,
+                        headersPtr,
+                        opaque);
+
+                    if (errorCode != ErrorCode.NoError)
+                    {
+                        if (headersPtr != IntPtr.Zero)
+                        {
+                            Librdkafka.headers_destroy(headersPtr);
+                        }
+                    }
+
+                    return errorCode;
+                }
+                catch
+                {
+                    if (headersPtr != IntPtr.Zero)
+                    {
+                        Librdkafka.headers_destroy(headersPtr);
+                    }
+
+                    throw;
+                }
+            }
+        }
+
 
         private static int[] MarshalCopy(IntPtr source, int length)
         {

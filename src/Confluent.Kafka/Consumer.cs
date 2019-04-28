@@ -914,5 +914,163 @@ namespace Confluent.Kafka
             => (keyDeserializer != null && valueDeserializer != null)
                 ? ConsumeImpl<TKey, TValue>(timeout.TotalMillisecondsAsInt(), keyDeserializer, valueDeserializer) // fast path for simple case
                 : ConsumeViaBytes(timeout.TotalMillisecondsAsInt());
+
+
+
+        public SimpleConsumeResult<TKey, TValue> ConsumeFast(int millisecondsTimeout)
+        {
+            var msgPtr = kafkaHandle.ConsumerPoll((IntPtr)millisecondsTimeout);
+            if (msgPtr == IntPtr.Zero)
+            {
+                return default;
+            }
+
+            try
+            {
+                var msg = Util.Marshal.PtrToStructure<rd_kafka_message>(msgPtr);
+
+                string topic = null;
+                if (this.enableTopicNameMarshaling)
+                {
+                    if (msg.rkt != IntPtr.Zero)
+                    {
+                        topic = Util.Marshal.PtrToStringUTF8(Librdkafka.topic_name(msg.rkt));
+                    }
+                }
+
+                if (msg.err == ErrorCode.Local_PartitionEOF)
+                {
+                    return default;
+                }
+
+                long timestampUnix = 0;
+                IntPtr timestampType = (IntPtr)TimestampType.NotAvailable;
+                if (enableTimestampMarshaling)
+                {
+                    timestampUnix = Librdkafka.message_timestamp(msgPtr, out timestampType);
+                }
+                var timestamp = new Timestamp(timestampUnix, (TimestampType)timestampType);
+
+                Headers headers = null;
+                if (enableHeaderMarshaling)
+                {
+                    headers = new Headers();
+                    Librdkafka.message_headers(msgPtr, out IntPtr hdrsPtr);
+                    if (hdrsPtr != IntPtr.Zero)
+                    {
+                        for (var i = 0; ; ++i)
+                        {
+                            var err = Librdkafka.header_get_all(hdrsPtr, (IntPtr)i, out IntPtr namep, out IntPtr valuep, out IntPtr sizep);
+                            if (err != ErrorCode.NoError)
+                            {
+                                break;
+                            }
+                            var headerName = Util.Marshal.PtrToStringUTF8(namep);
+                            byte[] headerValue = null;
+                            if (valuep != IntPtr.Zero)
+                            {
+                                headerValue = new byte[(int)sizep];
+                                Marshal.Copy(valuep, headerValue, 0, (int)sizep);
+                            }
+                            headers.Add(headerName, headerValue);
+                        }
+                    }
+                }
+
+                if (msg.err != ErrorCode.NoError)
+                {
+                    throw new ConsumeException(
+                        new ConsumeResult<byte[], byte[]>
+                        {
+                            TopicPartitionOffset = new TopicPartitionOffset(topic, msg.partition, msg.offset),
+                            Message = new Message<byte[], byte[]>
+                            {
+                                Timestamp = timestamp,
+                                Headers = headers,
+                                Key = KeyAsByteArray(msg),
+                                Value = ValueAsByteArray(msg)
+                            },
+                            IsPartitionEOF = false
+                        },
+                        kafkaHandle.CreatePossiblyFatalError(msg.err, null));
+                }
+
+                TKey key;
+                try
+                {
+                    unsafe
+                    {
+                        key = keyDeserializer(
+                            msg.key == IntPtr.Zero
+                                ? ReadOnlySpan<byte>.Empty
+                                : new ReadOnlySpan<byte>(msg.key.ToPointer(), (int)msg.key_len),
+                            msg.key == IntPtr.Zero);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    throw new ConsumeException(
+                        new ConsumeResult<byte[], byte[]>
+                        {
+                            TopicPartitionOffset = new TopicPartitionOffset(topic, msg.partition, msg.offset),
+                            Message = new Message<byte[], byte[]>
+                            {
+                                Timestamp = timestamp,
+                                Headers = headers,
+                                Key = KeyAsByteArray(msg),
+                                Value = ValueAsByteArray(msg)
+                            },
+                            IsPartitionEOF = false
+                        },
+                        new Error(ErrorCode.Local_KeyDeserialization),
+                        ex);
+                }
+
+                TValue val;
+                try
+                {
+                    unsafe
+                    {
+                        val = valueDeserializer(
+                            msg.val == IntPtr.Zero
+                                ? ReadOnlySpan<byte>.Empty
+                                : new ReadOnlySpan<byte>(msg.val.ToPointer(), (int)msg.len),
+                            msg.val == IntPtr.Zero);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    throw new ConsumeException(
+                        new ConsumeResult<byte[], byte[]>
+                        {
+                            TopicPartitionOffset = new TopicPartitionOffset(topic, msg.partition, msg.offset),
+                            Message = new Message<byte[], byte[]>
+                            {
+                                Timestamp = timestamp,
+                                Headers = headers,
+                                Key = KeyAsByteArray(msg),
+                                Value = ValueAsByteArray(msg)
+                            },
+                            IsPartitionEOF = false
+                        },
+                        new Error(ErrorCode.Local_ValueDeserialization),
+                        ex);
+                }
+
+                return new SimpleConsumeResult<TKey, TValue>
+                {
+                    Key = key,
+                    Value = val,
+                    Offset = msg.offset,
+                    Headers = headers,
+                    Partition = msg.partition,
+                    Timestamp = timestamp.UtcDateTime
+                };
+            }
+            finally
+            {
+                Librdkafka.message_destroy(msgPtr);
+            }
+        }
     }
 }

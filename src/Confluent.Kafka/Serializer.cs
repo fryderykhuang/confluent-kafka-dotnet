@@ -14,6 +14,8 @@
 //
 // Refer to LICENSE for more information.
 
+using System;
+
 namespace Confluent.Kafka
 {
     /// <summary>
@@ -25,5 +27,5 @@ namespace Confluent.Kafka
     /// <returns>
     ///     The serialized value.
     /// </returns>
-    public delegate byte[] Serializer<T>(T data);
+    public delegate ReadOnlySpan<byte> Serializer<T>(T data);
 }
