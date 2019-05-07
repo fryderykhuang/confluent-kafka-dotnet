@@ -139,14 +139,20 @@ namespace Confluent.Kafka
 
                 lock (assignCallCountLockObj) { assignCallCount = 0; }
                 var assignTo = partitionsAssignedHandler(partitionAssignment);
-                lock (assignCallCountLockObj)
+                if (assignTo != null)
                 {
-                    if (assignCallCount > 0)
+                    lock (assignCallCountLockObj)
                     {
-                        throw new InvalidOperationException("Assign/Unassign must not be called in the partitions assigned handler.");
+                        if (assignCallCount > 0)
+                        {
+                            throw new InvalidOperationException(
+                                "Assign/Unassign must not be called in the partitions assigned handler.");
+                        }
                     }
+
+                    Assign(assignTo);
                 }
-                Assign(assignTo);
+
                 return;
             }
             
