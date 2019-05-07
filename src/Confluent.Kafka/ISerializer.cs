@@ -27,15 +27,15 @@ namespace Confluent.Kafka
         ///     Serialize the key or value of a <see cref="Message{TKey,TValue}" />
         ///     instance.
         /// </summary>
-    /// <param name="data">
-    ///     The value to serialize.
-    /// </param>
+        /// <param name="data">
+        ///     The value to serialize.
+        /// </param>
         /// <param name="context">
         ///     Context relevant to the serialize operation.
         /// </param>
-    /// <returns>
-    ///     The serialized value.
-    /// </returns>
-    public delegate ReadOnlySpan<byte> Serializer<T>(T data, SerializationContext context);
-}
+        /// <returns>
+        ///     The serialized value.
+        /// </returns>
+        ReadOnlySpan<byte> Serialize(T data, SerializationContext context);
+    } 
 }

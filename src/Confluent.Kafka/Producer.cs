@@ -768,7 +768,7 @@ namespace Confluent.Kafka
             ReadOnlySpan<byte> keyBytes;
             try
             {
-                keyBytes = keySerializer(message.Key);
+                keyBytes = keySerializer.Serialize(message.Key, new SerializationContext(MessageComponentType.Key, topicPartition.Topic));
             }
             catch (Exception ex)
             {
@@ -785,7 +785,7 @@ namespace Confluent.Kafka
             ReadOnlySpan<byte> valBytes;
             try
             {
-                valBytes = valueSerializer(message.Value);
+                valBytes = valueSerializer.Serialize(message.Value, new SerializationContext(MessageComponentType.Value, topicPartition.Topic));
             }
             catch (Exception ex)
             {
@@ -958,7 +958,7 @@ namespace Confluent.Kafka
             ReadOnlySpan<byte> keyBytes;
             try
             {
-                keyBytes = keySerializer(key);
+                keyBytes = keySerializer.Serialize(key, new SerializationContext(MessageComponentType.Key, topic));
             }
             catch (Exception ex)
             {
@@ -976,7 +976,7 @@ namespace Confluent.Kafka
             ReadOnlySpan<byte> valBytes;
             try
             {
-                valBytes = valueSerializer(value);
+                valBytes = valueSerializer.Serialize(value, new SerializationContext(MessageComponentType.Value, topic));
 
             }
             catch (Exception ex)

@@ -69,7 +69,7 @@ namespace Confluent.Kafka.SyncOverAsync
         /// <returns>
         ///     the serialized data.
         /// </returns>
-        public byte[] Serialize(T data, SerializationContext context)
+        public ReadOnlySpan<byte> Serialize(T data, SerializationContext context)
             => asyncSerializer.SerializeAsync(data, context)
                 .ConfigureAwait(continueOnCapturedContext: false)
                 .GetAwaiter()

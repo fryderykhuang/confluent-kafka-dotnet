@@ -26,7 +26,7 @@ namespace Confluent.Kafka
     /// </summary>
     public class ProducerBuilder<TKey, TValue>
     {
-        public delegate void DeliveryReportReceivedDelegate(Producer<TKey, TValue> producer, ref rd_kafka_message msg);
+        public delegate void DeliveryReportReceivedDelegate(IProducer<TKey, TValue> producer, ref rd_kafka_message msg);
 
         /// <summary>
         ///     The config dictionary.
