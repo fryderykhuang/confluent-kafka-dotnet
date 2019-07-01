@@ -145,85 +145,96 @@ namespace Confluent.Kafka
         private bool _deliveryReportAsUserState;
         private InternalDeliveryReportReceivedDelegate deliveryReportReceivedHandler;
 
+        private static readonly int SizeOfKafkaMsg = Marshal.SizeOf(typeof(rd_kafka_message));
+
         private void DeliveryReportCallbackImpl(IntPtr rk, IntPtr rkmessage, IntPtr opaque)
         {
             // Ensure registered handlers are never called as a side-effect of Dispose/Finalize (prevents deadlocks in common scenarios).
             if (ownedKafkaHandle.IsClosed) { return; }
 
-            var msg = Util.Marshal.PtrToStructure<rd_kafka_message>(rkmessage);
-
-            deliveryReportReceivedHandler?.Invoke(ref msg);
-
-            if (_deliveryReportAsUserState)
+//            var msg = Util.Marshal.PtrToStructure<rd_kafka_message>(rkmessage);
+            unsafe
             {
-                return;
-            }
+                var msg = MemoryMarshal.Read<rd_kafka_message>(new ReadOnlySpan<byte>(rkmessage.ToPointer(),
+                    SizeOfKafkaMsg));
 
-            // the msg._private property has dual purpose. Here, it is an opaque pointer set
-            // by Topic.Produce to be an IDeliveryHandler. When Consuming, it's for internal
-            // use (hence the name).
-            if (msg._private == IntPtr.Zero)
-            {
-                // Note: this can occur if the ProduceAsync overload that accepts a DeliveryHandler
-                // was used and the delivery handler was set to null.
-                return;
-            }
+                deliveryReportReceivedHandler?.Invoke(ref msg);
 
-            var gch = GCHandle.FromIntPtr(msg._private);
-            var deliveryHandler = (IDeliveryHandler) gch.Target;
-            gch.Free();
-
-            Headers headers = null;
-            if (this.enableDeliveryReportHeaders) 
-            {
-                headers = new Headers();
-                Librdkafka.message_headers(rkmessage, out IntPtr hdrsPtr);
-                if (hdrsPtr != IntPtr.Zero)
+                if (_deliveryReportAsUserState)
                 {
-                    for (var i=0; ; ++i)
+                    return;
+                }
+
+                // the msg._private property has dual purpose. Here, it is an opaque pointer set
+                // by Topic.Produce to be an IDeliveryHandler. When Consuming, it's for internal
+                // use (hence the name).
+                if (msg._private == IntPtr.Zero)
+                {
+                    // Note: this can occur if the ProduceAsync overload that accepts a DeliveryHandler
+                    // was used and the delivery handler was set to null.
+                    return;
+                }
+
+                var gch = GCHandle.FromIntPtr(msg._private);
+                var deliveryHandler = (IDeliveryHandler) gch.Target;
+                gch.Free();
+
+                Headers headers = null;
+                if (this.enableDeliveryReportHeaders)
+                {
+                    headers = new Headers();
+                    Librdkafka.message_headers(rkmessage, out IntPtr hdrsPtr);
+                    if (hdrsPtr != IntPtr.Zero)
                     {
-                        var err = Librdkafka.header_get_all(hdrsPtr, (IntPtr)i, out IntPtr namep, out IntPtr valuep, out IntPtr sizep);
-                        if (err != ErrorCode.NoError)
+                        for (var i = 0;; ++i)
                         {
-                            break;
+                            var err = Librdkafka.header_get_all(hdrsPtr, (IntPtr) i, out IntPtr namep,
+                                out IntPtr valuep, out IntPtr sizep);
+                            if (err != ErrorCode.NoError)
+                            {
+                                break;
+                            }
+
+                            var headerName = Util.Marshal.PtrToStringUTF8(namep);
+                            byte[] headerValue = null;
+                            if (valuep != IntPtr.Zero)
+                            {
+                                headerValue = new byte[(int) sizep];
+                                Marshal.Copy(valuep, headerValue, 0, (int) sizep);
+                            }
+
+                            headers.Add(headerName, headerValue);
                         }
-                        var headerName = Util.Marshal.PtrToStringUTF8(namep);
-                        byte[] headerValue = null;
-                        if (valuep != IntPtr.Zero)
-                        {
-                            headerValue = new byte[(int)sizep];
-                            Marshal.Copy(valuep, headerValue, 0, (int)sizep);
-                        }
-                        headers.Add(headerName, headerValue);
                     }
                 }
-            }
 
-            IntPtr timestampType = (IntPtr)TimestampType.NotAvailable;
-            long timestamp = 0;
-            if (enableDeliveryReportTimestamp)
-            {
-                timestamp = Librdkafka.message_timestamp(rkmessage, out timestampType);
-            }
-
-            PersistenceStatus messageStatus = PersistenceStatus.PossiblyPersisted;
-            if (enableDeliveryReportPersistedStatus)
-            {
-                messageStatus = Librdkafka.message_status(rkmessage);
-            }
-
-            deliveryHandler.HandleDeliveryReport(
-                new DeliveryReport<Null, Null>
+                IntPtr timestampType = (IntPtr) TimestampType.NotAvailable;
+                long timestamp = 0;
+                if (enableDeliveryReportTimestamp)
                 {
-                    // Topic is not set here in order to avoid the marshalling cost.
-                    // Instead, the delivery handler is expected to cache the topic string.
-                    Partition = msg.partition, 
-                    Offset = msg.offset, 
-                    Error = KafkaHandle.CreatePossiblyFatalError(msg.err, null),
-                    Status = messageStatus,
-                    Message = new Message<Null, Null> { Timestamp = new Timestamp(timestamp, (TimestampType)timestampType), Headers = headers }
+                    timestamp = Librdkafka.message_timestamp(rkmessage, out timestampType);
                 }
-            );
+
+                PersistenceStatus messageStatus = PersistenceStatus.PossiblyPersisted;
+                if (enableDeliveryReportPersistedStatus)
+                {
+                    messageStatus = Librdkafka.message_status(rkmessage);
+                }
+
+                deliveryHandler.HandleDeliveryReport(
+                    new DeliveryReport<Null, Null>
+                    {
+                        // Topic is not set here in order to avoid the marshalling cost.
+                        // Instead, the delivery handler is expected to cache the topic string.
+                        Partition = msg.partition,
+                        Offset = msg.offset,
+                        Error = KafkaHandle.CreatePossiblyFatalError(msg.err, null),
+                        Status = messageStatus,
+                        Message = new Message<Null, Null>
+                            {Timestamp = new Timestamp(timestamp, (TimestampType) timestampType), Headers = headers}
+                    }
+                );
+            }
         }
 
         private void ProduceImpl(
