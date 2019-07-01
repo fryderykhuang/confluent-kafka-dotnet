@@ -693,7 +693,7 @@ namespace Confluent.Kafka
             byte[] keyBytes;
             try
             {
-                keyBytes = await asyncKeySerializer.SerializeAsync(message.Key, new SerializationContext(MessageComponentType.Key, topicPartition.Topic));
+                keyBytes = await asyncKeySerializer.SerializeAsync(message.Key, new SerializationContext(MessageComponentType.Key, topicPartition.Topic)).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -710,7 +710,7 @@ namespace Confluent.Kafka
             byte[] valBytes;
             try
             {
-                valBytes = await asyncValueSerializer.SerializeAsync(message.Value, new SerializationContext(MessageComponentType.Value, topicPartition.Topic));
+                valBytes = await asyncValueSerializer.SerializeAsync(message.Value, new SerializationContext(MessageComponentType.Value, topicPartition.Topic)).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -740,7 +740,7 @@ namespace Confluent.Kafka
                         message.Timestamp, topicPartition.Partition, message.Headers,
                         handler);
 
-                    return await handler.Task;
+                    return await handler.Task.ConfigureAwait(false);
                 }
                 else
                 {
