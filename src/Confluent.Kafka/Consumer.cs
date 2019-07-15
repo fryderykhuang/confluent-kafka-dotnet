@@ -859,12 +859,13 @@ namespace Confluent.Kafka
 
 
 
-        public SimpleConsumeResult<TKey, TValue> ConsumeFast(int millisecondsTimeout)
+        public bool TryConsumeFast(int millisecondsTimeout, out SimpleConsumeResult<TKey, TValue> result)
         {
             var msgPtr = kafkaHandle.ConsumerPoll((IntPtr)millisecondsTimeout);
             if (msgPtr == IntPtr.Zero)
             {
-                return default;
+                result = default;
+                return false;
             }
 
             try
@@ -884,7 +885,8 @@ namespace Confluent.Kafka
 
                     if (msg.err == ErrorCode.Local_PartitionEOF)
                     {
-                        return default;
+                        result = default;
+                        return false;
                     }
 
                     long timestampUnix = 0;
@@ -997,7 +999,7 @@ namespace Confluent.Kafka
                             ex);
                     }
 
-                    return new SimpleConsumeResult<TKey, TValue>
+                    result = new SimpleConsumeResult<TKey, TValue>
                     {
                         Key = key,
                         Value = val,
@@ -1006,6 +1008,8 @@ namespace Confluent.Kafka
                         Partition = msg.partition,
                         Timestamp = timestamp.UtcDateTime
                     };
+
+                    return true;
                 }
             }
             finally
