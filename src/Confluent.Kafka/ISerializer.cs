@@ -33,9 +33,10 @@ namespace Confluent.Kafka
         /// <param name="context">
         ///     Context relevant to the serialize operation.
         /// </param>
+        /// <param name="scratchBuffer"></param>
         /// <returns>
         ///     The serialized value.
         /// </returns>
-        ReadOnlySpan<byte> Serialize(T data, SerializationContext context);
+        ReadOnlySpan<byte> Serialize(T data, SerializationContext context, byte[] scratchBuffer);
     } 
 }

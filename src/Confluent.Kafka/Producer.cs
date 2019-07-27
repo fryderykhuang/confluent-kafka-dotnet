@@ -779,7 +779,11 @@ namespace Confluent.Kafka
             ReadOnlySpan<byte> keyBytes;
             try
             {
-                keyBytes = keySerializer.Serialize(message.Key, new SerializationContext(MessageComponentType.Key, topicPartition.Topic));
+                if (_keyScratchBuffer == null)
+                {
+                    _keyScratchBuffer = new byte[_defaultKeyScratchBufferSize];
+                }
+                keyBytes = keySerializer.Serialize(message.Key, new SerializationContext(MessageComponentType.Key, topicPartition.Topic), _keyScratchBuffer);
             }
             catch (Exception ex)
             {
@@ -796,7 +800,11 @@ namespace Confluent.Kafka
             ReadOnlySpan<byte> valBytes;
             try
             {
-                valBytes = valueSerializer.Serialize(message.Value, new SerializationContext(MessageComponentType.Value, topicPartition.Topic));
+                if (_valueScratchBuffer == null)
+                {
+                    _valueScratchBuffer = new byte[_defaultValueScratchBufferSize];
+                }
+                valBytes = valueSerializer.Serialize(message.Value, new SerializationContext(MessageComponentType.Value, topicPartition.Topic), _valueScratchBuffer);
             }
             catch (Exception ex)
             {
@@ -896,8 +904,12 @@ namespace Confluent.Kafka
             ReadOnlySpan<byte> keyBytes;
             try
             {
+                if (_keyScratchBuffer == null)
+                {
+                    _keyScratchBuffer = new byte[_defaultKeyScratchBufferSize];
+                }
                 keyBytes = (keySerializer != null)
-                    ? keySerializer.Serialize(message.Key, new SerializationContext(MessageComponentType.Key, topicPartition.Topic))
+                    ? keySerializer.Serialize(message.Key, new SerializationContext(MessageComponentType.Key, topicPartition.Topic), _keyScratchBuffer)
                     : throw new InvalidOperationException("Produce called with an IAsyncSerializer key serializer configured but an ISerializer is required.");
             }
             catch (Exception ex)
@@ -915,8 +927,12 @@ namespace Confluent.Kafka
             ReadOnlySpan<byte> valBytes;
             try
             {
+                if (_valueScratchBuffer == null)
+                {
+                    _valueScratchBuffer = new byte[_defaultValueScratchBufferSize];
+                }
                 valBytes = (valueSerializer != null)
-                    ? valueSerializer.Serialize(message.Value, new SerializationContext(MessageComponentType.Value, topicPartition.Topic))
+                    ? valueSerializer.Serialize(message.Value, new SerializationContext(MessageComponentType.Value, topicPartition.Topic), _valueScratchBuffer)
                     : throw new InvalidOperationException("Produce called with an IAsyncSerializer value serializer configured but an ISerializer is required.");
             }
             catch (Exception ex)
@@ -957,6 +973,9 @@ namespace Confluent.Kafka
             }
         }
 
+        [ThreadStatic] private static byte[] _keyScratchBuffer;
+        [ThreadStatic] private static byte[] _valueScratchBuffer;
+
         public void BeginProduce(string topic, int partition, TKey key, TValue value, IntPtr userState,
             Timestamp timestamp = new Timestamp(),
             Headers headers = null)
@@ -969,7 +988,11 @@ namespace Confluent.Kafka
             ReadOnlySpan<byte> keyBytes;
             try
             {
-                keyBytes = keySerializer.Serialize(key, new SerializationContext(MessageComponentType.Key, topic));
+                if (_keyScratchBuffer == null)
+                {
+                    _keyScratchBuffer = new byte[_defaultKeyScratchBufferSize];
+                }
+                keyBytes = keySerializer.Serialize(key, new SerializationContext(MessageComponentType.Key, topic), _keyScratchBuffer);
             }
             catch (Exception ex)
             {
@@ -987,8 +1010,11 @@ namespace Confluent.Kafka
             ReadOnlySpan<byte> valBytes;
             try
             {
-                valBytes = valueSerializer.Serialize(value, new SerializationContext(MessageComponentType.Value, topic));
-
+                if (_valueScratchBuffer == null)
+                {
+                    _valueScratchBuffer = new byte[_defaultValueScratchBufferSize];
+                }
+                valBytes = valueSerializer.Serialize(value, new SerializationContext(MessageComponentType.Value, topic), _valueScratchBuffer);
             }
             catch (Exception ex)
             {
@@ -1024,6 +1050,9 @@ namespace Confluent.Kafka
                     });
             }
         }
+
+        private int _defaultKeyScratchBufferSize = 65536;
+        private int _defaultValueScratchBufferSize = 65536;
 
 
         private class TypedTaskDeliveryHandlerShim<K, V> : TaskCompletionSource<DeliveryResult<K, V>>, IDeliveryHandler
