@@ -56,6 +56,8 @@ namespace Confluent.Kafka
             ///     default: all
             /// </summary>
             public const string DeliveryReportFields = "dotnet.producer.delivery.report.fields";
+
+            public const string DeliveryReportAsUserState = "dotnet.producer.delivery.report.as.user.state";
         }
         
 

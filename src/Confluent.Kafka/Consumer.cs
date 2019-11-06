@@ -19,6 +19,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -138,14 +139,20 @@ namespace Confluent.Kafka
 
                 lock (assignCallCountLockObj) { assignCallCount = 0; }
                 var assignTo = partitionsAssignedHandler(partitionAssignment);
-                lock (assignCallCountLockObj)
+                if (assignTo != null)
                 {
-                    if (assignCallCount > 0)
+                    lock (assignCallCountLockObj)
                     {
-                        throw new InvalidOperationException("Assign/Unassign must not be called in the partitions assigned handler.");
+                        if (assignCallCount > 0)
+                        {
+                            throw new InvalidOperationException(
+                                "Assign/Unassign must not be called in the partitions assigned handler.");
+                        }
                     }
+
+                    Assign(assignTo);
                 }
-                Assign(assignTo);
+
                 return;
             }
             
@@ -592,24 +599,24 @@ namespace Confluent.Kafka
 
             if (partitionsAssignedHandler != null || partitionsRevokedHandler != null)
             {
-                Librdkafka.conf_set_rebalance_cb(configPtr, rebalanceDelegate);
+            Librdkafka.conf_set_rebalance_cb(configPtr, rebalanceDelegate);
             }
             if (offsetsCommittedHandler != null)
             {
-                Librdkafka.conf_set_offset_commit_cb(configPtr, commitDelegate);
+            Librdkafka.conf_set_offset_commit_cb(configPtr, commitDelegate);
             }
 
             if (errorHandler != null)
             {
-                Librdkafka.conf_set_error_cb(configPtr, errorCallbackDelegate);
+            Librdkafka.conf_set_error_cb(configPtr, errorCallbackDelegate);
             }
             if (logHandler != null)
             {
-                Librdkafka.conf_set_log_cb(configPtr, logCallbackDelegate);
+            Librdkafka.conf_set_log_cb(configPtr, logCallbackDelegate);
             }
             if (statisticsHandler != null)
             {
-                Librdkafka.conf_set_stats_cb(configPtr, statisticsCallbackDelegate);
+            Librdkafka.conf_set_stats_cb(configPtr, statisticsCallbackDelegate);
             }
 
             this.kafkaHandle = SafeKafkaHandle.Create(RdKafkaType.Consumer, configPtr, this);
@@ -651,7 +658,7 @@ namespace Confluent.Kafka
             {
                 this.valueDeserializer = builder.ValueDeserializer;
             }
-        }
+            }
 
 
         private ConsumeResult<K, V> ConsumeImpl<K,V>(
@@ -849,5 +856,166 @@ namespace Confluent.Kafka
         /// </summary>
         public ConsumeResult<TKey, TValue> Consume(TimeSpan timeout)
             => ConsumeImpl<TKey, TValue>(timeout.TotalMillisecondsAsInt(), keyDeserializer, valueDeserializer);
+
+
+
+        public bool TryConsumeFast(int millisecondsTimeout, out SimpleConsumeResult<TKey, TValue> result)
+        {
+            var msgPtr = kafkaHandle.ConsumerPoll((IntPtr)millisecondsTimeout);
+            if (msgPtr == IntPtr.Zero)
+            {
+                result = default;
+                return false;
+            }
+
+            try
+            {
+                unsafe
+                {
+                    var msg = Unsafe.ReadUnaligned<rd_kafka_message>(msgPtr.ToPointer());
+
+                    string topic = null;
+                    if (this.enableTopicNameMarshaling)
+                    {
+                        if (msg.rkt != IntPtr.Zero)
+                        {
+                            topic = Util.Marshal.PtrToStringUTF8(Librdkafka.topic_name(msg.rkt));
+                        }
+                    }
+
+                    if (msg.err == ErrorCode.Local_PartitionEOF)
+                    {
+                        result = default;
+                        return false;
+                    }
+
+                    long timestampUnix = 0;
+                    IntPtr timestampType = (IntPtr)TimestampType.NotAvailable;
+                    if (enableTimestampMarshaling)
+                    {
+                        timestampUnix = Librdkafka.message_timestamp(msgPtr, out timestampType);
+                    }
+                    var timestamp = new Timestamp(timestampUnix, (TimestampType)timestampType);
+
+                    Headers headers = null;
+                    if (enableHeaderMarshaling)
+                    {
+                        headers = new Headers();
+                        Librdkafka.message_headers(msgPtr, out IntPtr hdrsPtr);
+                        if (hdrsPtr != IntPtr.Zero)
+                        {
+                            for (var i = 0; ; ++i)
+                            {
+                                var err = Librdkafka.header_get_all(hdrsPtr, (IntPtr)i, out IntPtr namep, out IntPtr valuep, out IntPtr sizep);
+                                if (err != ErrorCode.NoError)
+                                {
+                                    break;
+                                }
+                                var headerName = Util.Marshal.PtrToStringUTF8(namep);
+                                byte[] headerValue = null;
+                                if (valuep != IntPtr.Zero)
+                                {
+                                    headerValue = new byte[(int)sizep];
+                                    Marshal.Copy(valuep, headerValue, 0, (int)sizep);
+                                }
+                                headers.Add(headerName, headerValue);
+                            }
+                        }
+                    }
+
+                    if (msg.err != ErrorCode.NoError)
+                    {
+                        throw new ConsumeException(
+                            new ConsumeResult<byte[], byte[]>
+                            {
+                                TopicPartitionOffset = new TopicPartitionOffset(topic, msg.partition, msg.offset),
+                                Message = new Message<byte[], byte[]>
+                                {
+                                    Timestamp = timestamp,
+                                    Headers = headers,
+                                    Key = KeyAsByteArray(msg),
+                                    Value = ValueAsByteArray(msg)
+                                },
+                                IsPartitionEOF = false
+                            },
+                            kafkaHandle.CreatePossiblyFatalError(msg.err, null));
+                    }
+
+                    TKey key;
+                    try
+                    {
+                        key = keyDeserializer.Deserialize(
+                            msg.key == IntPtr.Zero
+                                ? ReadOnlySpan<byte>.Empty
+                                : new ReadOnlySpan<byte>(msg.key.ToPointer(), (int) msg.key_len),
+                            msg.key == IntPtr.Zero,
+                            new SerializationContext(MessageComponentType.Key, topic));
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new ConsumeException(
+                            new ConsumeResult<byte[], byte[]>
+                            {
+                                TopicPartitionOffset = new TopicPartitionOffset(topic, msg.partition, msg.offset),
+                                Message = new Message<byte[], byte[]>
+                                {
+                                    Timestamp = timestamp,
+                                    Headers = headers,
+                                    Key = KeyAsByteArray(msg),
+                                    Value = ValueAsByteArray(msg)
+                                },
+                                IsPartitionEOF = false
+                            },
+                            new Error(ErrorCode.Local_KeyDeserialization),
+                            ex);
+                    }
+
+                    TValue val;
+                    try
+                    {
+                        val = valueDeserializer.Deserialize(
+                            msg.val == IntPtr.Zero
+                                ? ReadOnlySpan<byte>.Empty
+                                : new ReadOnlySpan<byte>(msg.val.ToPointer(), (int) msg.len),
+                            msg.val == IntPtr.Zero,
+                            new SerializationContext(MessageComponentType.Value, topic));
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new ConsumeException(
+                            new ConsumeResult<byte[], byte[]>
+                            {
+                                TopicPartitionOffset = new TopicPartitionOffset(topic, msg.partition, msg.offset),
+                                Message = new Message<byte[], byte[]>
+                                {
+                                    Timestamp = timestamp,
+                                    Headers = headers,
+                                    Key = KeyAsByteArray(msg),
+                                    Value = ValueAsByteArray(msg)
+                                },
+                                IsPartitionEOF = false
+                            },
+                            new Error(ErrorCode.Local_ValueDeserialization),
+                            ex);
+                    }
+
+                    result = new SimpleConsumeResult<TKey, TValue>
+                    {
+                        Key = key,
+                        Value = val,
+                        Offset = msg.offset,
+                        Headers = headers,
+                        Partition = msg.partition,
+                        Timestamp = timestamp.UtcDateTime
+                    };
+
+                    return true;
+                }
+            }
+            finally
+            {
+                Librdkafka.message_destroy(msgPtr);
+            }
+        }
     }
 }

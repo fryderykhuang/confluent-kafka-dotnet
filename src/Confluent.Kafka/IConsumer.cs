@@ -566,5 +566,7 @@ namespace Confluent.Kafka
         ///     Thrown if the operation fails.
         /// </exception>
         void Close();
+
+        bool TryConsumeFast(int millisecondsTimeout, out SimpleConsumeResult<TKey, TValue> result);
     }
 }

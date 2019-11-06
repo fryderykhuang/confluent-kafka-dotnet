@@ -15,6 +15,8 @@
 // Refer to LICENSE for more information.
 
 using System;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 
 
@@ -32,7 +34,7 @@ namespace Confluent.Kafka
         
         private class Utf8Serializer : ISerializer<string>
         {
-            public byte[] Serialize(string data, SerializationContext context)
+            public ReadOnlySpan<byte> Serialize(string data, SerializationContext context, byte[] scratchBuffer)
             {
                 if (data == null)
                 {
@@ -51,7 +53,7 @@ namespace Confluent.Kafka
 
         private class NullSerializer : ISerializer<Null>
         {
-            public byte[] Serialize(Null data, SerializationContext context)
+            public ReadOnlySpan<byte> Serialize(Null data, SerializationContext context, byte[] scratchBuffer)
                 => null;
         }
 
@@ -63,9 +65,8 @@ namespace Confluent.Kafka
 
         private class Int64Serializer : ISerializer<long>
         {
-            public byte[] Serialize(long data, SerializationContext context)
+            public ReadOnlySpan<byte> Serialize(long data, SerializationContext context, byte[] result)
             {
-                var result = new byte[8];
                 result[0] = (byte)(data >> 56);
                 result[1] = (byte)(data >> 48);
                 result[2] = (byte)(data >> 40);
@@ -74,7 +75,7 @@ namespace Confluent.Kafka
                 result[5] = (byte)(data >> 16);
                 result[6] = (byte)(data >> 8);
                 result[7] = (byte)data;
-                return result;
+                return new ReadOnlySpan<byte>(result, 0, 8);
             }
         }
 
@@ -86,9 +87,9 @@ namespace Confluent.Kafka
 
         private class Int32Serializer : ISerializer<int>
         {
-            public byte[] Serialize(int data, SerializationContext context)
+            public ReadOnlySpan<byte> Serialize(int data, SerializationContext context, byte[] result)
             {
-                var result = new byte[4]; // int is always 32 bits on .NET.
+//                var result = new byte[4]; // int is always 32 bits on .NET.
                 // network byte order -> big endian -> most significant byte in the smallest address.
                 // Note: At the IL level, the conv.u1 operator is used to cast int to byte which truncates
                 // the high order bits if overflow occurs.
@@ -97,7 +98,7 @@ namespace Confluent.Kafka
                 result[1] = (byte)(data >> 16); // & 0xff;
                 result[2] = (byte)(data >> 8); // & 0xff;
                 result[3] = (byte)data; // & 0xff;
-                return result;
+                return new ReadOnlySpan<byte>(result, 0, 4);
             }
         }
 
@@ -109,19 +110,19 @@ namespace Confluent.Kafka
 
         private class SingleSerializer : ISerializer<float>
         {
-            public byte[] Serialize(float data, SerializationContext context)
+            public ReadOnlySpan<byte> Serialize(float data, SerializationContext context, byte[] result)
             {
                 if (BitConverter.IsLittleEndian)
                 {
                     unsafe
                     {
-                        byte[] result = new byte[4];
+//                        byte[] result = new byte[4];
                         byte* p = (byte*)(&data);
                         result[3] = *p++;
                         result[2] = *p++;
                         result[1] = *p++;
                         result[0] = *p++;
-                        return result;
+                        return new ReadOnlySpan<byte>(result, 0, 4);
                     }
                 }
                 else
@@ -139,13 +140,13 @@ namespace Confluent.Kafka
 
         private class DoubleSerializer : ISerializer<double>
         {
-            public byte[] Serialize(double data, SerializationContext context)
+            public ReadOnlySpan<byte> Serialize(double data, SerializationContext context, byte[] result)
             {
                 if (BitConverter.IsLittleEndian)
                 {
                     unsafe
                     {
-                        byte[] result = new byte[8];
+//                        byte[] result = new byte[8];
                         byte* p = (byte*)(&data);
                         result[7] = *p++;
                         result[6] = *p++;
@@ -155,7 +156,7 @@ namespace Confluent.Kafka
                         result[2] = *p++;
                         result[1] = *p++;
                         result[0] = *p++;
-                        return result;
+                        return new ReadOnlySpan<byte>(result, 0, 8);
                     }
                 }
                 else
@@ -176,7 +177,7 @@ namespace Confluent.Kafka
         
         private class ByteArraySerializer : ISerializer<byte[]>
         {
-            public byte[] Serialize(byte[] data, SerializationContext context)
+            public ReadOnlySpan<byte> Serialize(byte[] data, SerializationContext context, byte[] scratchBuffer)
                 => data;
         }
     }

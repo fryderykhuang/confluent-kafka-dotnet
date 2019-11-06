@@ -16,6 +16,7 @@
 
 using System;
 using System.Collections.Generic;
+using Confluent.Kafka.Impl;
 
 
 namespace Confluent.Kafka
@@ -25,6 +26,8 @@ namespace Confluent.Kafka
     /// </summary>
     public class ProducerBuilder<TKey, TValue>
     {
+        public delegate void DeliveryReportReceivedDelegate(IProducer<TKey, TValue> producer, ref rd_kafka_message msg);
+
         /// <summary>
         ///     The config dictionary.
         /// </summary>
@@ -44,6 +47,8 @@ namespace Confluent.Kafka
         ///     The configured statistics handler.
         /// </summary>
         internal protected Action<IProducer<TKey, TValue>, string> StatisticsHandler { get; set; }
+
+        internal protected DeliveryReportReceivedDelegate DeliveryReportReceivedHandler { get; set; }
         
 
         /// <summary>
@@ -68,7 +73,7 @@ namespace Confluent.Kafka
 
         internal Producer<TKey,TValue>.Config ConstructBaseConfig(Producer<TKey, TValue> producer)
         {
-            return new Producer<TKey,TValue>.Config
+            return new Producer<TKey, TValue>.Config
             {
                 config = Config,
                 errorHandler = this.ErrorHandler == null
@@ -79,7 +84,10 @@ namespace Confluent.Kafka
                     : logMessage => this.LogHandler(producer, logMessage),
                 statisticsHandler = this.StatisticsHandler == null
                     ? default(Action<string>)
-                    : stats => this.StatisticsHandler(producer, stats)
+                    : stats => this.StatisticsHandler(producer, stats),
+                deliveryReportReceivedHandler = this.DeliveryReportReceivedHandler == null
+                    ? default(InternalDeliveryReportReceivedDelegate)
+                    : (ref rd_kafka_message msg) => this.DeliveryReportReceivedHandler(producer, ref msg)
             };
         }
 
@@ -161,6 +169,16 @@ namespace Confluent.Kafka
                 throw new InvalidOperationException("Log handler may not be specified more than once.");
             }
             this.LogHandler = logHandler;
+            return this;
+        }
+
+        public ProducerBuilder<TKey, TValue> SetDeliveryReportReceivedHandler(DeliveryReportReceivedDelegate handler)
+        {
+            if (this.DeliveryReportReceivedHandler != null)
+            {
+                throw new InvalidOperationException("Delivery report received handler may not be specified more than once.");
+            }
+            this.DeliveryReportReceivedHandler = handler;
             return this;
         }
 
