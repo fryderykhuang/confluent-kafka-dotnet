@@ -96,6 +96,11 @@ namespace Confluent.Kafka
             TopicPartition topicPartition,
             Message<TKey, TValue> message);
 
+        Task<DeliveryResult<TKey, TValue>> ProduceAsync(
+            string topic,
+            int partition,
+            Message<TKey, TValue> message);
+
         Task<DeliveryResult<TKey, TValue>> ProduceAsyncUsingAsyncSerializer(
             TopicPartition topicPartition,
             Message<TKey, TValue> message);
@@ -183,7 +188,11 @@ namespace Confluent.Kafka
         void BeginProduce(string topic, int partition, TKey key, TValue value, IntPtr userState,
             Timestamp timestamp = new Timestamp(),
             Headers headers = null);
-        
+
+        void BeginProduceNull(string topic, int partition, TKey key, IntPtr userState,
+            Timestamp timestamp = new Timestamp(),
+            Headers headers = null);
+
         /// <summary>
         ///     Poll for callback events.
         /// </summary>

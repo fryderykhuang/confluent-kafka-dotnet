@@ -865,6 +865,102 @@ namespace Confluent.Kafka
                     });
             }
         }
+        
+        
+        public Task<DeliveryResult<TKey, TValue>> ProduceAsync(
+            string topic,
+            int partition,
+            Message<TKey, TValue> message)
+        {
+            ReadOnlySpan<byte> keyBytes;
+            try
+            {
+                if (_keyScratchBuffer == null)
+                {
+                    _keyScratchBuffer = new byte[_defaultKeyScratchBufferSize];
+                }
+                keyBytes = keySerializer.Serialize(message.Key, new SerializationContext(MessageComponentType.Key, topic), _keyScratchBuffer);
+            }
+            catch (Exception ex)
+            {
+                throw new ProduceException<TKey, TValue>(
+                    new Error(ErrorCode.Local_KeySerialization),
+                    new DeliveryResult<TKey, TValue>
+                    {
+                        Message = message,
+                        TopicPartitionOffset = new TopicPartitionOffset(topic, partition, Offset.Unset)
+                    },
+                    ex);
+            }
+
+            ReadOnlySpan<byte> valBytes;
+            try
+            {
+                if (_valueScratchBuffer == null)
+                {
+                    _valueScratchBuffer = new byte[_defaultValueScratchBufferSize];
+                }
+                valBytes = valueSerializer.Serialize(message.Value, new SerializationContext(MessageComponentType.Value, topic), _valueScratchBuffer);
+            }
+            catch (Exception ex)
+            {
+                throw new ProduceException<TKey, TValue>(
+                    new Error(ErrorCode.Local_ValueSerialization),
+                    new DeliveryResult<TKey, TValue>
+                    {
+                        Message = message,
+                        TopicPartitionOffset = new TopicPartitionOffset(topic, partition, Offset.Unset)
+                    },
+                    ex);
+            }
+
+            try
+            {
+                if (enableDeliveryReports)
+                {
+                    var handler = new TypedTaskDeliveryHandlerShim<TKey, TValue>(
+                        topic,
+                        enableDeliveryReportKey ? message.Key : default(TKey),
+                        enableDeliveryReportValue ? message.Value : default(TValue));
+
+                    ProduceImpl(
+                        topic,
+                        valBytes,
+                        keyBytes,
+                        message.Timestamp, partition, message.Headers,
+                        handler);
+
+                    return handler.Task;
+                }
+                else
+                {
+                    ProduceImpl(
+                        topic,
+                        valBytes,
+                        keyBytes,
+                        message.Timestamp, partition, message.Headers,
+                        null);
+
+                    var result = new DeliveryResult<TKey, TValue>
+                    {
+                        TopicPartitionOffset = new TopicPartitionOffset(topic, partition, Offset.Unset),
+                        Message = message
+                    };
+
+                    return Task.FromResult(result);
+                }
+            }
+            catch (KafkaException ex)
+            {
+                throw new ProduceException<TKey, TValue>(
+                    ex.Error,
+                    new DeliveryResult<TKey, TValue>
+                    {
+                        Message = message,
+                        TopicPartitionOffset = new TopicPartitionOffset(topic, partition, Offset.Unset)
+                    });
+            }
+        }
 
 
         /// <summary>
@@ -1049,7 +1145,61 @@ namespace Confluent.Kafka
                         TopicPartitionOffset = new TopicPartitionOffset(topic, (Partition) partition, Offset.Unset),
                     });
             }
+        } 
+        
+        public void BeginProduceNull(string topic, int partition, TKey key, IntPtr userState,
+            Timestamp timestamp = new Timestamp(),
+            Headers headers = null)
+        {
+            if (userState != IntPtr.Zero && !enableDeliveryReports)
+            {
+                throw new InvalidOperationException("Delivery report must be enabled to use userstate.");
+            }
+
+            ReadOnlySpan<byte> keyBytes;
+            try
+            {
+                if (_keyScratchBuffer == null)
+                {
+                    _keyScratchBuffer = new byte[_defaultKeyScratchBufferSize];
+                }
+                keyBytes = keySerializer.Serialize(key, new SerializationContext(MessageComponentType.Key, topic), _keyScratchBuffer);
+            }
+            catch (Exception ex)
+            {
+                throw new ProduceException<TKey, TValue>(
+                    new Error(ErrorCode.Local_KeySerialization, ex.ToString()),
+                    new DeliveryResult<TKey, TValue>
+                    {
+                        Message = new Message<TKey, TValue>()
+                            {Value = default, Key = key, Headers = headers, Timestamp = timestamp},
+                        TopicPartitionOffset = new TopicPartitionOffset(topic, (Partition) partition, Offset.Unset),
+                    }
+                );
+            }
+
+            try
+            {
+                ProduceImpl(
+                    topic,
+                    ReadOnlySpan<byte>.Empty, 
+                    keyBytes,
+                    timestamp, partition,
+                    headers, userState);
+            }
+            catch (KafkaException ex)
+            {
+                throw new ProduceException<TKey, TValue>(
+                    ex.Error,
+                    new DeliveryReport<TKey, TValue>
+                    {
+                        Message = new Message<TKey, TValue>()
+                            {Value = default, Key = key, Headers = headers, Timestamp = timestamp},
+                        TopicPartitionOffset = new TopicPartitionOffset(topic, (Partition) partition, Offset.Unset),
+                    });
+            }
         }
+
 
         private int _defaultKeyScratchBufferSize = 65536;
         private int _defaultValueScratchBufferSize = 65536;
