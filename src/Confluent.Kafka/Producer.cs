@@ -189,87 +189,88 @@ namespace Confluent.Kafka
             try
             {
 //            var msg = Util.Marshal.PtrToStructure<rd_kafka_message>(rkmessage);
-            unsafe
-            {
-                var msg = MemoryMarshal.Read<rd_kafka_message>(new ReadOnlySpan<byte>(rkmessage.ToPointer(),
-                    SizeOfKafkaMsg));
-
-                deliveryReportReceivedHandler?.Invoke(ref msg);
-
-                if (_deliveryReportAsUserState)
+                unsafe
                 {
-                    return;
-                }
+                    var msg = MemoryMarshal.Read<rd_kafka_message>(new ReadOnlySpan<byte>(rkmessage.ToPointer(),
+                        SizeOfKafkaMsg));
 
-                // the msg._private property has dual purpose. Here, it is an opaque pointer set
-                // by Topic.Produce to be an IDeliveryHandler. When Consuming, it's for internal
-                // use (hence the name).
-                if (msg._private == IntPtr.Zero)
-                {
-                    // Note: this can occur if the ProduceAsync overload that accepts a DeliveryHandler
-                    // was used and the delivery handler was set to null.
-                    return;
-                }
+                    deliveryReportReceivedHandler?.Invoke(ref msg);
 
-                var gch = GCHandle.FromIntPtr(msg._private);
-                var deliveryHandler = (IDeliveryHandler) gch.Target;
-                gch.Free();
-
-                Headers headers = null;
-                if (this.enableDeliveryReportHeaders)
-                {
-                    headers = new Headers();
-                    Librdkafka.message_headers(rkmessage, out IntPtr hdrsPtr);
-                    if (hdrsPtr != IntPtr.Zero)
+                    if (_deliveryReportAsUserState)
                     {
-                        for (var i = 0;; ++i)
+                        return;
+                    }
+
+                    // the msg._private property has dual purpose. Here, it is an opaque pointer set
+                    // by Topic.Produce to be an IDeliveryHandler. When Consuming, it's for internal
+                    // use (hence the name).
+                    if (msg._private == IntPtr.Zero)
+                    {
+                        // Note: this can occur if the ProduceAsync overload that accepts a DeliveryHandler
+                        // was used and the delivery handler was set to null.
+                        return;
+                    }
+
+                    var gch = GCHandle.FromIntPtr(msg._private);
+                    var deliveryHandler = (IDeliveryHandler) gch.Target;
+                    gch.Free();
+
+                    Headers headers = null;
+                    if (this.enableDeliveryReportHeaders)
+                    {
+                        headers = new Headers();
+                        Librdkafka.message_headers(rkmessage, out IntPtr hdrsPtr);
+                        if (hdrsPtr != IntPtr.Zero)
                         {
-                            var err = Librdkafka.header_get_all(hdrsPtr, (IntPtr) i, out IntPtr namep,
-                                out IntPtr valuep, out IntPtr sizep);
-                            if (err != ErrorCode.NoError)
+                            for (var i = 0;; ++i)
                             {
-                                break;
-                            }
+                                var err = Librdkafka.header_get_all(hdrsPtr, (IntPtr) i, out IntPtr namep,
+                                    out IntPtr valuep, out IntPtr sizep);
+                                if (err != ErrorCode.NoError)
+                                {
+                                    break;
+                                }
 
-                            var headerName = Util.Marshal.PtrToStringUTF8(namep);
-                            byte[] headerValue = null;
-                            if (valuep != IntPtr.Zero)
-                            {
-                                headerValue = new byte[(int) sizep];
-                                Marshal.Copy(valuep, headerValue, 0, (int) sizep);
-                            }
+                                var headerName = Util.Marshal.PtrToStringUTF8(namep);
+                                byte[] headerValue = null;
+                                if (valuep != IntPtr.Zero)
+                                {
+                                    headerValue = new byte[(int) sizep];
+                                    Marshal.Copy(valuep, headerValue, 0, (int) sizep);
+                                }
 
-                            headers.Add(headerName, headerValue);
+                                headers.Add(headerName, headerValue);
+                            }
                         }
                     }
-                }
 
-                IntPtr timestampType = (IntPtr) TimestampType.NotAvailable;
-                long timestamp = 0;
-                if (enableDeliveryReportTimestamp)
-                {
-                    timestamp = Librdkafka.message_timestamp(rkmessage, out timestampType);
-                }
-
-                PersistenceStatus messageStatus = PersistenceStatus.PossiblyPersisted;
-                if (enableDeliveryReportPersistedStatus)
-                {
-                    messageStatus = Librdkafka.message_status(rkmessage);
-                }
-
-                deliveryHandler.HandleDeliveryReport(
-                    new DeliveryReport<Null, Null>
+                    IntPtr timestampType = (IntPtr) TimestampType.NotAvailable;
+                    long timestamp = 0;
+                    if (enableDeliveryReportTimestamp)
                     {
-                        // Topic is not set here in order to avoid the marshalling cost.
-                        // Instead, the delivery handler is expected to cache the topic string.
-                        Partition = msg.partition,
-                        Offset = msg.offset,
-                        Error = KafkaHandle.CreatePossiblyFatalError(msg.err, null),
-                        Status = messageStatus,
-                        Message = new Message<Null, Null>
-                            {Timestamp = new Timestamp(timestamp, (TimestampType) timestampType), Headers = headers}
+                        timestamp = Librdkafka.message_timestamp(rkmessage, out timestampType);
                     }
-                );
+
+                    PersistenceStatus messageStatus = PersistenceStatus.PossiblyPersisted;
+                    if (enableDeliveryReportPersistedStatus)
+                    {
+                        messageStatus = Librdkafka.message_status(rkmessage);
+                    }
+
+                    deliveryHandler.HandleDeliveryReport(
+                        new DeliveryReport<Null, Null>
+                        {
+                            // Topic is not set here in order to avoid the marshalling cost.
+                            // Instead, the delivery handler is expected to cache the topic string.
+                            Partition = msg.partition,
+                            Offset = msg.offset,
+                            Error = KafkaHandle.CreatePossiblyFatalError(msg.err, null),
+                            Status = messageStatus,
+                            Message = new Message<Null, Null>
+                                {Timestamp = new Timestamp(timestamp, (TimestampType) timestampType), Headers = headers}
+                        }
+                    );
+                }
             }
             catch (Exception e)
             {
@@ -621,7 +622,7 @@ namespace Confluent.Kafka
                     prop.Key != ConfigPropertyNames.Producer.EnableDeliveryReports &&
                     prop.Key != ConfigPropertyNames.Producer.DeliveryReportFields && 
                     prop.Key != ConfigPropertyNames.Producer.DeliveryReportAsUserState)
-                .ToList();
+                .ToList());
 
             if (modifiedConfig.Where(obj => obj.Key == "delivery.report.only.error").Count() > 0)
             {
@@ -683,11 +684,15 @@ namespace Confluent.Kafka
 
             var configHandle = SafeConfigHandle.Create();
 
-            modifiedConfig.ForEach((kvp) =>
+            foreach (var kvp in modifiedConfig)
+            {
+                if (kvp.Value == null)
                 {
-                    if (kvp.Value == null) { throw new ArgumentNullException($"'{kvp.Key}' configuration parameter must not be null."); }
+                    throw new ArgumentNullException($"'{kvp.Key}' configuration parameter must not be null.");
+                }
+
                 configHandle.Set(kvp.Key, kvp.Value);
-            });
+            }
 
 
             IntPtr configPtr = configHandle.DangerousGetHandle();
@@ -741,9 +746,11 @@ namespace Confluent.Kafka
             byte[] keyBytes;
             try
             {
-                keyBytes = (keySerializer != null)
-                    ? keySerializer.Serialize(message.Key, new SerializationContext(MessageComponentType.Key, topicPartition.Topic, headers))
-                    : await asyncKeySerializer.SerializeAsync(message.Key, new SerializationContext(MessageComponentType.Key, topicPartition.Topic, headers)).ConfigureAwait(false);
+                keyBytes = 
+                    // (keySerializer != null)
+                    // ? keySerializer.Serialize(message.Key, new SerializationContext(MessageComponentType.Key, topicPartition.Topic, headers))
+                    // :
+                    await asyncKeySerializer.SerializeAsync(message.Key, new SerializationContext(MessageComponentType.Key, topicPartition.Topic, headers)).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -760,9 +767,11 @@ namespace Confluent.Kafka
             byte[] valBytes;
             try
             {
-                valBytes = (valueSerializer != null)
-                    ? valueSerializer.Serialize(message.Value, new SerializationContext(MessageComponentType.Value, topicPartition.Topic, headers))
-                    : await asyncValueSerializer.SerializeAsync(message.Value, new SerializationContext(MessageComponentType.Value, topicPartition.Topic, headers)).ConfigureAwait(false);
+                valBytes = 
+                    // (valueSerializer != null)
+                    // ? valueSerializer.Serialize(message.Value, new SerializationContext(MessageComponentType.Value, topicPartition.Topic, headers))
+                    // : 
+                    await asyncValueSerializer.SerializeAsync(message.Value, new SerializationContext(MessageComponentType.Value, topicPartition.Topic, headers)).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -831,7 +840,13 @@ namespace Confluent.Kafka
 
         public Task<DeliveryResult<TKey, TValue>> ProduceAsync(
             TopicPartition topicPartition,
-            Message<TKey, TValue> message)
+            Message<TKey, TValue> message) =>
+            ProduceAsync(topicPartition, message, CancellationToken.None);
+
+        public Task<DeliveryResult<TKey, TValue>> ProduceAsync(
+            TopicPartition topicPartition,
+            Message<TKey, TValue> message,
+            CancellationToken cancellationToken)
         {
             ReadOnlySpan<byte> keyBytes;
             try
@@ -840,7 +855,7 @@ namespace Confluent.Kafka
                 {
                     _keyScratchBuffer = new byte[_defaultKeyScratchBufferSize];
                 }
-                keyBytes = keySerializer.Serialize(message.Key, new SerializationContext(MessageComponentType.Key, topicPartition.Topic), _keyScratchBuffer);
+                keyBytes = keySerializer.Serialize(message.Key, new SerializationContext(MessageComponentType.Key, topicPartition.Topic, message.Headers), _keyScratchBuffer);
             }
             catch (Exception ex)
             {
@@ -861,7 +876,7 @@ namespace Confluent.Kafka
                 {
                     _valueScratchBuffer = new byte[_defaultValueScratchBufferSize];
                 }
-                valBytes = valueSerializer.Serialize(message.Value, new SerializationContext(MessageComponentType.Value, topicPartition.Topic), _valueScratchBuffer);
+                valBytes = valueSerializer.Serialize(message.Value, new SerializationContext(MessageComponentType.Value, topicPartition.Topic, message.Headers), _valueScratchBuffer);
             }
             catch (Exception ex)
             {
@@ -879,7 +894,7 @@ namespace Confluent.Kafka
             {
                 if (enableDeliveryReports)
                 {
-                    var handler = new TypedTaskDeliveryHandlerShim<TKey, TValue>(
+                    var handler = new TypedTaskDeliveryHandlerShim(
                         topicPartition.Topic,
                         enableDeliveryReportKey ? message.Key : default(TKey),
                         enableDeliveryReportValue ? message.Value : default(TValue));
@@ -891,6 +906,11 @@ namespace Confluent.Kafka
                         message.Timestamp, topicPartition.Partition, message.Headers,
                         handler);
 
+                    if (cancellationToken.CanBeCanceled)
+                    {
+                        cancellationToken.Register(() => handler.TrySetCanceled());
+                    }
+                    
                     return handler.Task;
                 }
                 else
@@ -927,7 +947,8 @@ namespace Confluent.Kafka
         public Task<DeliveryResult<TKey, TValue>> ProduceAsync(
             string topic,
             int partition,
-            Message<TKey, TValue> message)
+            Message<TKey, TValue> message,
+            CancellationToken cancellationToken)
         {
             ReadOnlySpan<byte> keyBytes;
             try
@@ -936,7 +957,7 @@ namespace Confluent.Kafka
                 {
                     _keyScratchBuffer = new byte[_defaultKeyScratchBufferSize];
                 }
-                keyBytes = keySerializer.Serialize(message.Key, new SerializationContext(MessageComponentType.Key, topic), _keyScratchBuffer);
+                keyBytes = keySerializer.Serialize(message.Key, new SerializationContext(MessageComponentType.Key, topic, message.Headers), _keyScratchBuffer);
             }
             catch (Exception ex)
             {
@@ -957,7 +978,7 @@ namespace Confluent.Kafka
                 {
                     _valueScratchBuffer = new byte[_defaultValueScratchBufferSize];
                 }
-                valBytes = valueSerializer.Serialize(message.Value, new SerializationContext(MessageComponentType.Value, topic), _valueScratchBuffer);
+                valBytes = valueSerializer.Serialize(message.Value, new SerializationContext(MessageComponentType.Value, topic, message.Headers), _valueScratchBuffer);
             }
             catch (Exception ex)
             {
@@ -975,7 +996,7 @@ namespace Confluent.Kafka
             {
                 if (enableDeliveryReports)
                 {
-                    var handler = new TypedTaskDeliveryHandlerShim<TKey, TValue>(
+                    var handler = new TypedTaskDeliveryHandlerShim(
                         topic,
                         enableDeliveryReportKey ? message.Key : default(TKey),
                         enableDeliveryReportValue ? message.Value : default(TValue));
@@ -986,6 +1007,11 @@ namespace Confluent.Kafka
                         keyBytes,
                         message.Timestamp, partition, message.Headers,
                         handler);
+                    
+                    if (cancellationToken.CanBeCanceled)
+                    {
+                        cancellationToken.Register(() => handler.TrySetCanceled());
+                    }                    
 
                     return handler.Task;
                 }
@@ -1059,7 +1085,7 @@ namespace Confluent.Kafka
                     _keyScratchBuffer = new byte[_defaultKeyScratchBufferSize];
                 }
                 keyBytes = (keySerializer != null)
-                    ? keySerializer.Serialize(message.Key, new SerializationContext(MessageComponentType.Key, topicPartition.Topic, headers))
+                    ? keySerializer.Serialize(message.Key, new SerializationContext(MessageComponentType.Key, topicPartition.Topic, headers),_valueScratchBuffer)
                     : throw new InvalidOperationException("Produce called with an IAsyncSerializer key serializer configured but an ISerializer is required.");
             }
             catch (Exception ex)
@@ -1082,7 +1108,7 @@ namespace Confluent.Kafka
                     _valueScratchBuffer = new byte[_defaultValueScratchBufferSize];
                 }
                 valBytes = (valueSerializer != null)
-                    ? valueSerializer.Serialize(message.Value, new SerializationContext(MessageComponentType.Value, topicPartition.Topic, headers))
+                    ? valueSerializer.Serialize(message.Value, new SerializationContext(MessageComponentType.Value, topicPartition.Topic, headers), _valueScratchBuffer)
                     : throw new InvalidOperationException("Produce called with an IAsyncSerializer value serializer configured but an ISerializer is required.");
             }
             catch (Exception ex)
@@ -1259,7 +1285,7 @@ namespace Confluent.Kafka
         private int _defaultValueScratchBufferSize = 65536;
 
 
-        private class TypedTaskDeliveryHandlerShim : TaskCompletionSource<DeliveryResult<K, V>>, IDeliveryHandler
+        private class TypedTaskDeliveryHandlerShim : TaskCompletionSource<DeliveryResult<TKey, TValue>>, IDeliveryHandler
         {
             public TypedTaskDeliveryHandlerShim(string topic, TKey key, TValue val)
 #if !NET45

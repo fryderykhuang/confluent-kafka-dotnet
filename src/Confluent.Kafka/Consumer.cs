@@ -1019,7 +1019,7 @@ namespace Confluent.Kafka
                 Librdkafka.message_destroy(msgPtr);
             }
         }
-    }
+    
         /// <inheritdoc/>
         public ConsumeResult<TKey, TValue> Consume(TimeSpan timeout)
             => Consume(timeout.TotalMillisecondsAsInt());

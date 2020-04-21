@@ -109,11 +109,11 @@ namespace Confluent.Kafka
         Task<DeliveryResult<TKey, TValue>> ProduceAsync(
             string topic,
             int partition,
-            Message<TKey, TValue> message);
+            Message<TKey, TValue> message, CancellationToken cancellationToken);
 
         Task<DeliveryResult<TKey, TValue>> ProduceAsyncUsingAsyncSerializer(
             TopicPartition topicPartition,
-            Message<TKey, TValue> message);
+            Message<TKey, TValue> message, CancellationToken cancellationToken);
 
         /// <summary>
         ///     Asynchronously send a single message to a
