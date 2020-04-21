@@ -92,6 +92,11 @@ namespace Confluent.Kafka
                         {
                             ct.ThrowIfCancellationRequested();
                             int eventsServedCount_ = ownedKafkaHandle.Poll((IntPtr)cancellationDelayMaxMs);
+                            if (this.handlerException != null)
+                            {
+                                errorHandler?.Invoke(new Error(ErrorCode.Local_Application, handlerException.ToString()));
+                                this.handlerException = null;
+                            }
 
                             // note: lock {} is equivalent to Monitor.Enter then Monitor.Exit 
                             if (eventsServedCount_ > 0)
@@ -108,13 +113,26 @@ namespace Confluent.Kafka
                 }, ct, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
 
+        // .NET Exceptions are not propagated through native code, so we need to
+        // do this book keeping explicitly.
+        private Exception handlerException = null;
+
+
         private Action<Error> errorHandler;
         private Librdkafka.ErrorDelegate errorCallbackDelegate;
         private void ErrorCallback(IntPtr rk, ErrorCode err, string reason, IntPtr opaque)
         {
             // Ensure registered handlers are never called as a side-effect of Dispose/Finalize (prevents deadlocks in common scenarios).
             if (ownedKafkaHandle.IsClosed) { return; }
+
+            try
+            {
             errorHandler?.Invoke(KafkaHandle.CreatePossiblyFatalError(err, reason));
+        }
+            catch (Exception)
+            {
+                // Eat any exception thrown by user log handler code.
+            }
         }
 
 
@@ -124,7 +142,16 @@ namespace Confluent.Kafka
         {
             // Ensure registered handlers are never called as a side-effect of Dispose/Finalize (prevents deadlocks in common scenarios).
             if (ownedKafkaHandle.IsClosed) { return 0; }
+
+            try
+            {
             statisticsHandler?.Invoke(Util.Marshal.PtrToStringUTF8(json));
+            }
+            catch (Exception e)
+            {
+                handlerException = e;
+            }
+
             return 0; // instruct librdkafka to immediately free the json ptr.
         }
 
@@ -137,7 +164,14 @@ namespace Confluent.Kafka
             // Ensure registered handlers are never called as a side-effect of Dispose/Finalize (prevents deadlocks in common scenarios).
             // Note: kafkaHandle can be null if the callback is during construction (in that case, we want the delegate to run).
             if (ownedKafkaHandle != null && ownedKafkaHandle.IsClosed) { return; }
+            try
+            {
             logHandler?.Invoke(new LogMessage(Util.Marshal.PtrToStringUTF8(Librdkafka.name(rk)), level, fac, buf));
+        }
+            catch (Exception)
+            {
+                // Eat any exception thrown by user log handler code.
+            }
         }
 
         private Librdkafka.DeliveryReportDelegate DeliveryReportCallback;
@@ -152,6 +186,8 @@ namespace Confluent.Kafka
             // Ensure registered handlers are never called as a side-effect of Dispose/Finalize (prevents deadlocks in common scenarios).
             if (ownedKafkaHandle.IsClosed) { return; }
 
+            try
+            {
 //            var msg = Util.Marshal.PtrToStructure<rd_kafka_message>(rkmessage);
             unsafe
             {
@@ -234,6 +270,10 @@ namespace Confluent.Kafka
                             {Timestamp = new Timestamp(timestamp, (TimestampType) timestampType), Headers = headers}
                     }
                 );
+            }
+            catch (Exception e)
+            {
+                handlerException = e;
             }
         }
 
@@ -361,21 +401,33 @@ namespace Confluent.Kafka
         }
 
 
-        /// <summary>
-        ///     Refer to <see cref="Confluent.Kafka.IProducer{TKey,TValue}.Flush(TimeSpan)" />
-        /// </summary>
+        /// <inheritdoc/>
         public int Flush(TimeSpan timeout)
-            => KafkaHandle.Flush(timeout.TotalMillisecondsAsInt());
+        {
+            var result = KafkaHandle.Flush(timeout.TotalMillisecondsAsInt());
+            if (this.handlerException != null)
+            {
+                errorHandler?.Invoke(new Error(ErrorCode.Local_Application, handlerException.ToString()));
+                var ex = this.handlerException;
+                this.handlerException = null;
+            }
+            return result;
+        }
 
 
-        /// <summary>
-        ///     Refer to <see cref="Confluent.Kafka.IProducer{TKey,TValue}.Flush(CancellationToken)" />
-        /// </summary>
+        /// <inheritdoc/>
         public void Flush(CancellationToken cancellationToken)
         {
             while (true)
             {
                 int result = KafkaHandle.Flush(100);
+                if (this.handlerException != null)
+                {
+                    errorHandler?.Invoke(new Error(ErrorCode.Local_Application, handlerException.ToString()));
+                    var ex = this.handlerException;
+                    this.handlerException = null;
+                }
+
                 if (result == 0)
                 {
                     return;
@@ -389,9 +441,7 @@ namespace Confluent.Kafka
         }
 
         
-        /// <summary>
-        ///     Releases all resources used by this <see cref="Producer{TKey,TValue}" />.
-        /// </summary>
+        /// <inheritdoc/>
         public void Dispose()
         {
             Dispose(true);
@@ -454,23 +504,17 @@ namespace Confluent.Kafka
         }
 
 
-        /// <summary>
-        ///     <see cref="IClient.Name" />
-        /// </summary>
+        /// <inheritdoc/>
         public string Name
             => KafkaHandle.Name;
 
 
-        /// <summary>
-        ///     <see cref="IClient.AddBrokers(string)" />
-        /// </summary>
+        /// <inheritdoc/>
         public int AddBrokers(string brokers)
             => KafkaHandle.AddBrokers(brokers);
 
 
-        /// <summary>
-        ///     <see cref="IClient.Handle" />
-        /// </summary>
+        /// <inheritdoc/>
         public Handle Handle 
         {
             get
@@ -570,12 +614,14 @@ namespace Confluent.Kafka
 
             Librdkafka.Initialize(null);
 
-            var modifiedConfig = config
+            var modifiedConfig = Library.NameAndVersionConfig
+                .Concat(config
                 .Where(prop => 
                     prop.Key != ConfigPropertyNames.Producer.EnableBackgroundPoll &&
                     prop.Key != ConfigPropertyNames.Producer.EnableDeliveryReports &&
                     prop.Key != ConfigPropertyNames.Producer.DeliveryReportFields && 
-                    prop.Key != ConfigPropertyNames.Producer.DeliveryReportAsUserState);
+                    prop.Key != ConfigPropertyNames.Producer.DeliveryReportAsUserState)
+                .ToList();
 
             if (modifiedConfig.Where(obj => obj.Key == "delivery.report.only.error").Count() > 0)
             {
@@ -637,8 +683,9 @@ namespace Confluent.Kafka
 
             var configHandle = SafeConfigHandle.Create();
 
-            modifiedConfig.ToList().ForEach((kvp) => {
-                if (kvp.Value == null) throw new ArgumentNullException($"'{kvp.Key}' configuration parameter must not be null.");
+            modifiedConfig.ForEach((kvp) =>
+                {
+                    if (kvp.Value == null) { throw new ArgumentNullException($"'{kvp.Key}' configuration parameter must not be null."); }
                 configHandle.Set(kvp.Key, kvp.Value);
             });
 
@@ -683,17 +730,20 @@ namespace Confluent.Kafka
         }
 
 
-        /// <summary>
-        ///     Refer to <see cref="Confluent.Kafka.IProducer{TKey,TValue}.ProduceAsync(TopicPartition, Message{TKey, TValue})" />
-        /// </summary>
+        /// <inheritdoc/>
         public async Task<DeliveryResult<TKey, TValue>> ProduceAsyncUsingAsyncSerializer(
             TopicPartition topicPartition,
-            Message<TKey, TValue> message)
+            Message<TKey, TValue> message,
+            CancellationToken cancellationToken)
         {
+            Headers headers = message.Headers ?? new Headers();
+
             byte[] keyBytes;
             try
             {
-                keyBytes = await asyncKeySerializer.SerializeAsync(message.Key, new SerializationContext(MessageComponentType.Key, topicPartition.Topic)).ConfigureAwait(false);
+                keyBytes = (keySerializer != null)
+                    ? keySerializer.Serialize(message.Key, new SerializationContext(MessageComponentType.Key, topicPartition.Topic, headers))
+                    : await asyncKeySerializer.SerializeAsync(message.Key, new SerializationContext(MessageComponentType.Key, topicPartition.Topic, headers)).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -710,7 +760,9 @@ namespace Confluent.Kafka
             byte[] valBytes;
             try
             {
-                valBytes = await asyncValueSerializer.SerializeAsync(message.Value, new SerializationContext(MessageComponentType.Value, topicPartition.Topic)).ConfigureAwait(false);
+                valBytes = (valueSerializer != null)
+                    ? valueSerializer.Serialize(message.Value, new SerializationContext(MessageComponentType.Value, topicPartition.Topic, headers))
+                    : await asyncValueSerializer.SerializeAsync(message.Value, new SerializationContext(MessageComponentType.Value, topicPartition.Topic, headers)).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -728,7 +780,7 @@ namespace Confluent.Kafka
             {
                 if (enableDeliveryReports)
                 {
-                    var handler = new TypedTaskDeliveryHandlerShim<TKey, TValue>(
+                    var handler = new TypedTaskDeliveryHandlerShim(
                         topicPartition.Topic,
                         enableDeliveryReportKey ? message.Key : default(TKey),
                         enableDeliveryReportValue ? message.Value : default(TValue));
@@ -737,8 +789,13 @@ namespace Confluent.Kafka
                         topicPartition.Topic,
                         valBytes,
                         keyBytes,
-                        message.Timestamp, topicPartition.Partition, message.Headers,
+                        message.Timestamp, topicPartition.Partition, headers,
                         handler);
+
+                    if (cancellationToken != null && cancellationToken.CanBeCanceled)
+                    {
+                        cancellationToken.Register(() => handler.TrySetCanceled());
+                    }
 
                     return await handler.Task.ConfigureAwait(false);
                 }
@@ -748,7 +805,7 @@ namespace Confluent.Kafka
                         topicPartition.Topic,
                         valBytes,
                         keyBytes,
-                        message.Timestamp, topicPartition.Partition, message.Headers,
+                        message.Timestamp, topicPartition.Partition, headers, 
                         null);
 
                     var result = new DeliveryResult<TKey, TValue>
@@ -968,14 +1025,12 @@ namespace Confluent.Kafka
         /// </summary>
         public Task<DeliveryResult<TKey, TValue>> ProduceAsync(
             string topic,
-            Message<TKey, TValue> message
-        )
-            => ProduceAsync(new TopicPartition(topic, Partition.Any), message);
+            Message<TKey, TValue> message,
+            CancellationToken cancellationToken)
+            => ProduceAsync(new TopicPartition(topic, Partition.Any), message, cancellationToken);
 
 
-        /// <summary>
-        ///     Refer to <see cref="Confluent.Kafka.IProducer{TKey,TValue}.Produce(string, Message{TKey, TValue}, Action{DeliveryReport{TKey, TValue}})" />
-        /// </summary>
+        /// <inheritdoc/>
         public void Produce(
             string topic,
             Message<TKey, TValue> message,
@@ -984,9 +1039,7 @@ namespace Confluent.Kafka
             => Produce(new TopicPartition(topic, Partition.Any), message, deliveryHandler);
 
 
-        /// <summary>
-        ///     Refer to <see cref="Confluent.Kafka.IProducer{TKey,TValue}.Produce(TopicPartition, Message{TKey, TValue}, Action{DeliveryReport{TKey, TValue}})" />
-        /// </summary>
+        /// <inheritdoc/>
         public void Produce(
             TopicPartition topicPartition,
             Message<TKey, TValue> message,
@@ -997,6 +1050,7 @@ namespace Confluent.Kafka
                 throw new InvalidOperationException("A delivery handler was specified, but delivery reports are disabled.");
             }
 
+            Headers headers = message.Headers ?? new Headers();
             ReadOnlySpan<byte> keyBytes;
             try
             {
@@ -1005,7 +1059,7 @@ namespace Confluent.Kafka
                     _keyScratchBuffer = new byte[_defaultKeyScratchBufferSize];
                 }
                 keyBytes = (keySerializer != null)
-                    ? keySerializer.Serialize(message.Key, new SerializationContext(MessageComponentType.Key, topicPartition.Topic), _keyScratchBuffer)
+                    ? keySerializer.Serialize(message.Key, new SerializationContext(MessageComponentType.Key, topicPartition.Topic, headers))
                     : throw new InvalidOperationException("Produce called with an IAsyncSerializer key serializer configured but an ISerializer is required.");
             }
             catch (Exception ex)
@@ -1028,7 +1082,7 @@ namespace Confluent.Kafka
                     _valueScratchBuffer = new byte[_defaultValueScratchBufferSize];
                 }
                 valBytes = (valueSerializer != null)
-                    ? valueSerializer.Serialize(message.Value, new SerializationContext(MessageComponentType.Value, topicPartition.Topic), _valueScratchBuffer)
+                    ? valueSerializer.Serialize(message.Value, new SerializationContext(MessageComponentType.Value, topicPartition.Topic, headers))
                     : throw new InvalidOperationException("Produce called with an IAsyncSerializer value serializer configured but an ISerializer is required.");
             }
             catch (Exception ex)
@@ -1050,8 +1104,8 @@ namespace Confluent.Kafka
                     valBytes, 
                     keyBytes,
                     message.Timestamp, topicPartition.Partition, 
-                    message.Headers,
-                    new TypedDeliveryHandlerShim_Action<TKey, TValue>(
+                    headers,
+                    new TypedDeliveryHandlerShim_Action(
                         topicPartition.Topic,
                         enableDeliveryReportKey ? message.Key : default(TKey),
                         enableDeliveryReportValue ? message.Value : default(TValue),
@@ -1205,9 +1259,9 @@ namespace Confluent.Kafka
         private int _defaultValueScratchBufferSize = 65536;
 
 
-        private class TypedTaskDeliveryHandlerShim<K, V> : TaskCompletionSource<DeliveryResult<K, V>>, IDeliveryHandler
+        private class TypedTaskDeliveryHandlerShim : TaskCompletionSource<DeliveryResult<K, V>>, IDeliveryHandler
         {
-            public TypedTaskDeliveryHandlerShim(string topic, K key, V val)
+            public TypedTaskDeliveryHandlerShim(string topic, TKey key, TValue val)
 #if !NET45
                 : base(TaskCreationOptions.RunContinuationsAsynchronously)
 #endif
@@ -1219,9 +1273,9 @@ namespace Confluent.Kafka
 
             public string Topic;
 
-            public K Key;
+            public TKey Key;
 
-            public V Value;
+            public TValue Value;
 
             public void HandleDeliveryReport(DeliveryReport<Null, Null> deliveryReport)
             {
@@ -1235,11 +1289,11 @@ namespace Confluent.Kafka
                     return;
                 }
 
-                var dr = new DeliveryResult<K, V>
+                var dr = new DeliveryResult<TKey, TValue>
                 {
                     TopicPartitionOffset = deliveryReport.TopicPartitionOffset,
                     Status = deliveryReport.Status,
-                    Message = new Message<K, V>
+                    Message = new Message<TKey, TValue>
                     {
                         Key = Key,
                         Value = Value,
@@ -1254,7 +1308,7 @@ namespace Confluent.Kafka
 #if NET45
                 if (deliveryReport.Error.IsError)
                 {
-                    System.Threading.Tasks.Task.Run(() => SetException(new ProduceException<K, V>(deliveryReport.Error, dr)));
+                    System.Threading.Tasks.Task.Run(() => SetException(new ProduceException<TKey, TValue>(deliveryReport.Error, dr)));
                 }
                 else
                 {
@@ -1263,7 +1317,7 @@ namespace Confluent.Kafka
 #else
                 if (deliveryReport.Error.IsError)
                 {
-                    TrySetException(new ProduceException<K, V>(deliveryReport.Error, dr));
+                    TrySetException(new ProduceException<TKey, TValue>(deliveryReport.Error, dr));
                 }
                 else
                 {
@@ -1273,9 +1327,9 @@ namespace Confluent.Kafka
             }
         }
 
-        private class TypedDeliveryHandlerShim_Action<K, V> : IDeliveryHandler
+        private class TypedDeliveryHandlerShim_Action : IDeliveryHandler
         {
-            public TypedDeliveryHandlerShim_Action(string topic, K key, V val, Action<DeliveryReport<K, V>> handler)
+            public TypedDeliveryHandlerShim_Action(string topic, TKey key, TValue val, Action<DeliveryReport<TKey, TValue>> handler)
             {
                 Topic = topic;
                 Key = key;
@@ -1285,11 +1339,11 @@ namespace Confluent.Kafka
 
             public string Topic;
 
-            public K Key;
+            public TKey Key;
 
-            public V Value;
+            public TValue Value;
 
-            public Action<DeliveryReport<K, V>> Handler;
+            public Action<DeliveryReport<TKey, TValue>> Handler;
 
             public void HandleDeliveryReport(DeliveryReport<Null, Null> deliveryReport)
             {
@@ -1298,11 +1352,11 @@ namespace Confluent.Kafka
                     return;
                 }
 
-                var dr = new DeliveryReport<K, V>
+                var dr = new DeliveryReport<TKey, TValue>
                 {
                     TopicPartitionOffsetError = deliveryReport.TopicPartitionOffsetError,
                     Status = deliveryReport.Status,
-                    Message = new Message<K, V> 
+                    Message = new Message<TKey, TValue> 
                     {
                         Key = Key,
                         Value = Value,
@@ -1322,6 +1376,26 @@ namespace Confluent.Kafka
                 }
             }
         }
+
+        /// <inheritdoc/>
+        public void InitTransactions(TimeSpan timeout)
+            => KafkaHandle.InitTransactions(timeout.TotalMillisecondsAsInt());
+
+        /// <inheritdoc/>
+        public void BeginTransaction()
+            => KafkaHandle.BeginTransaction();
+
+        /// <inheritdoc/>
+        public void CommitTransaction(TimeSpan timeout)
+            => KafkaHandle.CommitTransaction(timeout.TotalMillisecondsAsInt());
+        
+        /// <inheritdoc/>
+        public void AbortTransaction(TimeSpan timeout)
+            => KafkaHandle.AbortTransaction(timeout.TotalMillisecondsAsInt());
+
+        /// <inheritdoc/>
+        public void SendOffsetsToTransaction(IEnumerable<TopicPartitionOffset> offsets, IConsumerGroupMetadata groupMetadata, TimeSpan timeout)
+            => KafkaHandle.SendOffsetsToTransaction(offsets, groupMetadata, timeout.TotalMillisecondsAsInt());
     }
 
     internal delegate void InternalDeliveryReportReceivedDelegate(ref rd_kafka_message msg);

@@ -30,6 +30,32 @@ namespace Confluent.Kafka
         /// <summary>
         ///     Poll for new messages / events. Blocks
         ///     until a consume result is available or the
+        ///     timeout period has elapsed.
+        /// </summary>
+        /// <param name="millisecondsTimeout">
+        ///     The maximum period of time (in milliseconds)
+        ///     the call may block.
+        /// </param>
+        /// <returns>
+        ///     The consume result.
+        /// </returns>
+        /// <remarks>
+        ///     The partitions assigned/revoked and offsets
+        ///     committed handlers may be invoked as a
+        ///     side-effect of calling this method (on the
+        ///     same thread).
+        /// </remarks>
+        /// <exception cref="ConsumeException">
+        ///     Thrown
+        ///     when a call to this method is unsuccessful
+        ///     for any reason. Inspect the Error property
+        ///     of the exception for detailed information.
+        /// </exception>
+        ConsumeResult<TKey, TValue> Consume(int millisecondsTimeout);
+
+        /// <summary>
+        ///     Poll for new messages / events. Blocks
+        ///     until a consume result is available or the
         ///     operation has been cancelled.
         /// </summary>
         /// <param name="cancellationToken">
@@ -414,6 +440,35 @@ namespace Confluent.Kafka
         void Resume(IEnumerable<TopicPartition> partitions);
 
 
+
+        /// <summary>
+        ///     Retrieve current committed offsets for the
+        ///     current assignment.
+        ///
+        ///     The offset field of each requested partition
+        ///     will be set to the offset of the last consumed
+        ///     message, or Offset.Unset in case there was no
+        ///     previous message, or, alternately a partition
+        ///     specific error may also be returned.
+        /// </summary>
+        /// <param name="timeout">
+        ///     The maximum period of time the call
+        ///     may block.
+        /// </param>
+        /// <exception cref="Confluent.Kafka.KafkaException">
+        ///     Thrown if the request failed.
+        /// </exception>
+        /// <exception cref="Confluent.Kafka.TopicPartitionOffsetException">
+        ///     Thrown if any of the constituent results is in
+        ///     error. The entire result (which may contain
+        ///     constituent results that are not in error) is
+        ///     available via the
+        ///     <see cref="Confluent.Kafka.TopicPartitionOffsetException.Results" />
+        ///     property of the exception.
+        /// </exception>
+        List<TopicPartitionOffset> Committed(TimeSpan timeout);
+
+
         /// <summary>
         ///     Retrieve current committed offsets for the
         ///     specified topic partitions.
@@ -464,9 +519,12 @@ namespace Confluent.Kafka
         /// <summary>
         ///     Look up the offsets for the given partitions
         ///     by timestamp. The returned offset for each
-        ///     partition is the earliest offset whose
-        ///     timestamp is greater than or equal to the
-        ///     given timestamp in the corresponding partition.
+        ///     partition is the earliest offset for which
+        ///     the timestamp is greater than or equal to
+        ///     the given timestamp. If the provided
+        ///     timestamp exceeds that of the last message
+        ///     in the partition, a value of Offset.End (-1)
+        ///     will be returned.
         /// </summary>
         /// <remarks>
         ///     The consumer does not need to be assigned to
@@ -568,5 +626,14 @@ namespace Confluent.Kafka
         void Close();
 
         bool TryConsumeFast(int millisecondsTimeout, out SimpleConsumeResult<TKey, TValue> result);
+
+        /// <summary>
+        ///     The current consumer group metadata associated with this consumer,
+        ///     or null if a GroupId has not been specified for the consumer.
+        ///     This metadata object should be passed to the transactional producer's
+        ///     <see cref="IProducer{K,V}.SendOffsetsToTransaction(IEnumerable{TopicPartitionOffset},IConsumerGroupMetadata,TimeSpan)"/>
+        ///     method.
+        /// </summary>
+        IConsumerGroupMetadata ConsumerGroupMetadata { get; }
     }
 }
