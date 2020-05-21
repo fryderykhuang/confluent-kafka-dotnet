@@ -220,6 +220,8 @@ namespace Confluent.Kafka
         /// </returns>
         int Poll(TimeSpan timeout);
 
+        int Poll(int timeoutMs);
+
 
         /// <summary>
         ///     Wait until all outstanding produce requests and

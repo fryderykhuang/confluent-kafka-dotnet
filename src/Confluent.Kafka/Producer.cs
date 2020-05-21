@@ -401,6 +401,26 @@ namespace Confluent.Kafka
             }
         }
 
+        public int Poll(int timeoutMs)
+        {
+            if (manualPoll)
+            {
+                return this.KafkaHandle.Poll((IntPtr)timeoutMs);
+            }
+
+            lock (pollSyncObj)
+            {
+                if (eventsServedCount == 0)
+                {
+                    Monitor.Wait(pollSyncObj, timeoutMs);
+                }
+
+                var result = eventsServedCount;
+                eventsServedCount = 0;
+                return result;
+            }
+        }
+
 
         /// <inheritdoc/>
         public int Flush(TimeSpan timeout)
