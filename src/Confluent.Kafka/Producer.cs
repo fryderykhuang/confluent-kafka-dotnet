@@ -1106,7 +1106,7 @@ namespace Confluent.Kafka
                     _keyScratchBuffer = new byte[_defaultKeyScratchBufferSize];
                 }
                 keyBytes = (keySerializer != null)
-                    ? keySerializer.Serialize(message.Key, new SerializationContext(MessageComponentType.Key, topicPartition.Topic, headers),_valueScratchBuffer)
+                    ? keySerializer.Serialize(message.Key, new SerializationContext(MessageComponentType.Key, topicPartition.Topic, headers), _keyScratchBuffer)
                     : throw new InvalidOperationException("Produce called with an IAsyncSerializer key serializer configured but an ISerializer is required.");
             }
             catch (Exception ex)

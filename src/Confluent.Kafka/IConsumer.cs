@@ -625,7 +625,7 @@ namespace Confluent.Kafka
         /// </exception>
         void Close();
 
-        bool TryConsumeFast(int millisecondsTimeout, out SimpleConsumeResult<TKey, TValue> result);
+        (bool HasResult, int Partition, DateTime Timestamp, long Offset) TryConsumeFast(out TKey key, out TValue value);
 
         /// <summary>
         ///     The current consumer group metadata associated with this consumer,

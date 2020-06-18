@@ -78,6 +78,8 @@ namespace Confluent.Kafka
             ///     default: all
             /// </summary>
             public const string ConsumeResultFields = "dotnet.consumer.consume.result.fields";
+
+            public const string DefaultConsumePollTimeoutMs = "dotnet.consumer.consume.poll.timeout";
         }
 
         /// <summary>

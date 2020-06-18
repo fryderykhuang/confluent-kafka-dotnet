@@ -22,7 +22,6 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
-using System.Threading.Tasks;
 using Confluent.Kafka.Impl;
 using Confluent.Kafka.Internal;
 
@@ -235,6 +234,8 @@ namespace Confluent.Kafka
 
         private Action<CommittedOffsets> offsetsCommittedHandler;
         private Librdkafka.CommitDelegate commitDelegate;
+        private int _defaultConsumePollTimeoutMs = 2000;
+
         private void CommitCallback(
             IntPtr rk,
             ErrorCode err,
@@ -578,6 +579,12 @@ namespace Confluent.Kafka
                 }
             }
 
+            var defaultConsumePollTimeoutMsObj = config.FirstOrDefault(x => x.Key == ConfigPropertyNames.Consumer.DefaultConsumePollTimeoutMs).Value;
+            if (defaultConsumePollTimeoutMsObj != null)
+            {
+                _defaultConsumePollTimeoutMs = int.Parse(defaultConsumePollTimeoutMsObj);
+            }
+
             var configHandle = SafeConfigHandle.Create();
 
             modifiedConfig.ForEach((kvp) =>
@@ -766,8 +773,7 @@ namespace Confluent.Kafka
                             msg.key == IntPtr.Zero
                                 ? ReadOnlySpan<byte>.Empty
                                 : new ReadOnlySpan<byte>(msg.key.ToPointer(), (int)msg.key_len),
-                            msg.key == IntPtr.Zero,
-                            new SerializationContext(MessageComponentType.Key, topic, headers));
+                            msg.key == IntPtr.Zero);
                     }
                 }
                 catch (Exception ex)
@@ -798,8 +804,7 @@ namespace Confluent.Kafka
                             msg.val == IntPtr.Zero
                                 ? ReadOnlySpan<byte>.Empty
                                 : new ReadOnlySpan<byte>(msg.val.ToPointer(), (int)msg.len),
-                            msg.val == IntPtr.Zero,
-                            new SerializationContext(MessageComponentType.Value, topic, headers));
+                            msg.val == IntPtr.Zero);
                     }
                 }
                 catch (Exception ex)
@@ -857,27 +862,25 @@ namespace Confluent.Kafka
                 return result;
             }
         }
-
-
-
-
-        public bool TryConsumeFast(int millisecondsTimeout, out SimpleConsumeResult<TKey, TValue> result)
+        
+        public (bool HasResult, int Partition, DateTime Timestamp, long Offset) TryConsumeFast(out TKey key, out TValue value)
         {
-            var msgPtr = kafkaHandle.ConsumerPoll((IntPtr)millisecondsTimeout);
+            var msgPtr = kafkaHandle.ConsumerPoll((IntPtr) _defaultConsumePollTimeoutMs);
             if (msgPtr == IntPtr.Zero)
             {
-                result = default;
-                return false;
+                key = default;
+                value = default;
+                return default;
             }
 
             try
             {
                 unsafe
                 {
-                    var msg = Unsafe.ReadUnaligned<rd_kafka_message>(msgPtr.ToPointer());
+                    var msg = Unsafe.ReadUnaligned<rd_kafka_message>(msgPtr.ToPointer()); // Unsafe.ReadUnaligned<rd_kafka_message>(msgPtr.ToPointer());
 
                     string topic = null;
-                    if (this.enableTopicNameMarshaling)
+                    if (enableTopicNameMarshaling)
                     {
                         if (msg.rkt != IntPtr.Zero)
                         {
@@ -887,8 +890,9 @@ namespace Confluent.Kafka
 
                     if (msg.err == ErrorCode.Local_PartitionEOF)
                     {
-                        result = default;
-                        return false;
+                        key = default;
+                        value = default;
+                        return default;
                     }
 
                     long timestampUnix = 0;
@@ -899,31 +903,30 @@ namespace Confluent.Kafka
                     }
                     var timestamp = new Timestamp(timestampUnix, (TimestampType)timestampType);
 
-                    Headers headers = null;
-                    if (enableHeaderMarshaling)
-                    {
-                        headers = new Headers();
-                        Librdkafka.message_headers(msgPtr, out IntPtr hdrsPtr);
-                        if (hdrsPtr != IntPtr.Zero)
-                        {
-                            for (var i = 0; ; ++i)
-                            {
-                                var err = Librdkafka.header_get_all(hdrsPtr, (IntPtr)i, out IntPtr namep, out IntPtr valuep, out IntPtr sizep);
-                                if (err != ErrorCode.NoError)
-                                {
-                                    break;
-                                }
-                                var headerName = Util.Marshal.PtrToStringUTF8(namep);
-                                byte[] headerValue = null;
-                                if (valuep != IntPtr.Zero)
-                                {
-                                    headerValue = new byte[(int)sizep];
-                                    Marshal.Copy(valuep, headerValue, 0, (int)sizep);
-                                }
-                                headers.Add(headerName, headerValue);
-                            }
-                        }
-                    }
+                    // Headers headers = null;
+                    // if (enableHeaderMarshaling)
+                    // {
+                    //     Librdkafka.message_headers(msgPtr, out IntPtr hdrsPtr);
+                    //     if (hdrsPtr != IntPtr.Zero)
+                    //     {
+                    //         for (var i = 0; ; ++i)
+                    //         {
+                    //             var err = Librdkafka.header_get_all(hdrsPtr, (IntPtr)i, out IntPtr namep, out IntPtr valuep, out IntPtr sizep);
+                    //             if (err != ErrorCode.NoError)
+                    //             {
+                    //                 break;
+                    //             }
+                    //             var headerName = Util.Marshal.PtrToStringUTF8(namep);
+                    //             byte[] headerValue = null;
+                    //             if (valuep != IntPtr.Zero)
+                    //             {
+                    //                 headerValue = new byte[(int)sizep];
+                    //                 Marshal.Copy(valuep, headerValue, 0, (int)sizep);
+                    //             }
+                    //             headers.Add(headerName, headerValue);
+                    //         }
+                    //     }
+                    // }
 
                     if (msg.err != ErrorCode.NoError)
                     {
@@ -934,7 +937,7 @@ namespace Confluent.Kafka
                                 Message = new Message<byte[], byte[]>
                                 {
                                     Timestamp = timestamp,
-                                    Headers = headers,
+                                    // Headers = resultMetadata.Headers, //headers,
                                     Key = KeyAsByteArray(msg),
                                     Value = ValueAsByteArray(msg)
                                 },
@@ -943,15 +946,14 @@ namespace Confluent.Kafka
                             kafkaHandle.CreatePossiblyFatalError(msg.err, null));
                     }
 
-                    TKey key;
+                    // TKey key;
                     try
                     {
-                        key = keyDeserializer.Deserialize(
+                        keyDeserializer.Deserialize(
                             msg.key == IntPtr.Zero
                                 ? ReadOnlySpan<byte>.Empty
                                 : new ReadOnlySpan<byte>(msg.key.ToPointer(), (int) msg.key_len),
-                            msg.key == IntPtr.Zero,
-                            new SerializationContext(MessageComponentType.Key, topic));
+                            msg.key == IntPtr.Zero, out key);
                     }
                     catch (Exception ex)
                     {
@@ -962,25 +964,22 @@ namespace Confluent.Kafka
                                 Message = new Message<byte[], byte[]>
                                 {
                                     Timestamp = timestamp,
-                                    Headers = headers,
+                                    // Headers = resultMetadata.Headers, //headers,
                                     Key = KeyAsByteArray(msg),
                                     Value = ValueAsByteArray(msg)
                                 },
                                 IsPartitionEOF = false
                             },
-                            new Error(ErrorCode.Local_KeyDeserialization),
-                            ex);
+                            new Error(ErrorCode.Local_KeyDeserialization), ex);
                     }
 
-                    TValue val;
+                    // TValue val;
                     try
                     {
-                        val = valueDeserializer.Deserialize(
+                        valueDeserializer.Deserialize(
                             msg.val == IntPtr.Zero
                                 ? ReadOnlySpan<byte>.Empty
-                                : new ReadOnlySpan<byte>(msg.val.ToPointer(), (int) msg.len),
-                            msg.val == IntPtr.Zero,
-                            new SerializationContext(MessageComponentType.Value, topic));
+                                : new ReadOnlySpan<byte>(msg.val.ToPointer(), (int) msg.len), msg.val == IntPtr.Zero, out value);
                     }
                     catch (Exception ex)
                     {
@@ -991,27 +990,16 @@ namespace Confluent.Kafka
                                 Message = new Message<byte[], byte[]>
                                 {
                                     Timestamp = timestamp,
-                                    Headers = headers,
+                                    // Headers = resultMetadata.Headers, //headers,
                                     Key = KeyAsByteArray(msg),
                                     Value = ValueAsByteArray(msg)
                                 },
                                 IsPartitionEOF = false
                             },
-                            new Error(ErrorCode.Local_ValueDeserialization),
-                            ex);
+                            new Error(ErrorCode.Local_ValueDeserialization), ex);
                     }
 
-                    result = new SimpleConsumeResult<TKey, TValue>
-                    {
-                        Key = key,
-                        Value = val,
-                        Offset = msg.offset,
-                        Headers = headers,
-                        Partition = msg.partition,
-                        Timestamp = timestamp.UtcDateTime
-                    };
-
-                    return true;
+                    return (true, msg.partition, timestamp.UtcDateTime, msg.offset);
                 }
             }
             finally

@@ -39,7 +39,7 @@ namespace Confluent.Kafka.IntegrationTests
 
         class TestDeserializer : IDeserializer<string>
         {
-            public string Deserialize(ReadOnlySpan<byte> data, bool isNull, SerializationContext context)
+            public string Deserialize(ReadOnlySpan<byte> data, bool isNull)
             {
                 Assert.NotNull(context.Headers);
                 return null;

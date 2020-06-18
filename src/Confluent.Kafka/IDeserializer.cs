@@ -33,12 +33,11 @@ namespace Confluent.Kafka
         /// <param name="isNull">
         ///     Whether or not the value is null.
         /// </param>
-        /// <param name="context">
-        ///     Context relevant to the deserialize operation.
-        /// </param>
         /// <returns>
         ///     The deserialized value.
         /// </returns>
-        T Deserialize(ReadOnlySpan<byte> data, bool isNull, SerializationContext context);
+        T Deserialize(ReadOnlySpan<byte> data, bool isNull);
+
+        void Deserialize(ReadOnlySpan<byte> data, bool isNull, out T result);
     }
 }

@@ -69,7 +69,7 @@ namespace Confluent.Kafka.IntegrationTests
         {
             class Utf32Deserializer : IDeserializer<string>
             {
-                public string Deserialize(ReadOnlySpan<byte> data, bool isNull, SerializationContext context)
+                public string Deserialize(ReadOnlySpan<byte> data, bool isNull)
                 {
                     if (isNull) { return null; }
                     return Encoding.UTF32.GetString(data);

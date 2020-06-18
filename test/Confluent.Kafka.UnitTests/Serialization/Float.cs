@@ -28,7 +28,7 @@ namespace Confluent.Kafka.UnitTests.Serialization
         {
             foreach (var value in TestData)
             {
-                Assert.Equal(value, Deserializers.Single.Deserialize(Serializers.Single.Serialize(value, SerializationContext.Empty), false, SerializationContext.Empty));
+                Assert.Equal(value, Deserializers.Single.Deserialize(Serializers.Single.Serialize(value, SerializationContext.Empty), false));
             }
         }
 
@@ -45,15 +45,15 @@ namespace Confluent.Kafka.UnitTests.Serialization
         [Fact]
         public void DeserializeArgNullThrow()
         {
-            Assert.ThrowsAny<ArgumentNullException>(() => Deserializers.Single.Deserialize(null, true, SerializationContext.Empty));
+            Assert.ThrowsAny<ArgumentNullException>(() => Deserializers.Single.Deserialize(null, true));
         }
 
         [Fact]
         public void DeserializeArgLengthNotEqual4Throw()
         {
-            Assert.ThrowsAny<ArgumentException>(() => Deserializers.Single.Deserialize(new byte[0], false, SerializationContext.Empty));
-            Assert.ThrowsAny<ArgumentException>(() => Deserializers.Single.Deserialize(new byte[3], false, SerializationContext.Empty));
-            Assert.ThrowsAny<ArgumentException>(() => Deserializers.Single.Deserialize(new byte[5], false, SerializationContext.Empty));
+            Assert.ThrowsAny<ArgumentException>(() => Deserializers.Single.Deserialize(new byte[0], false));
+            Assert.ThrowsAny<ArgumentException>(() => Deserializers.Single.Deserialize(new byte[3], false));
+            Assert.ThrowsAny<ArgumentException>(() => Deserializers.Single.Deserialize(new byte[5], false));
         }
 
         public static float[] TestData

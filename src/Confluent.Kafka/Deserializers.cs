@@ -32,18 +32,25 @@ namespace Confluent.Kafka
         
         private class Utf8Deserializer : IDeserializer<string>
         {
-            public string Deserialize(ReadOnlySpan<byte> data, bool isNull, SerializationContext context)
+            public string Deserialize(ReadOnlySpan<byte> data, bool isNull)
             {
                 if (isNull)
                 {
                     return null;
                 }
 
-                #if NETCOREAPP2_1
-                    return Encoding.UTF8.GetString(data);
-                #else
-                    return Encoding.UTF8.GetString(data.ToArray());
-                #endif
+                return Encoding.UTF8.GetString(data);
+            }
+
+            public void Deserialize(ReadOnlySpan<byte> data, bool isNull, out string result)
+            {
+                if (isNull)
+                {
+                    result = null;
+                    return;
+                }
+
+                result = Encoding.UTF8.GetString(data);
             }
         }
 
@@ -54,7 +61,7 @@ namespace Confluent.Kafka
 
         private class NullDeserializer : IDeserializer<Null>
         {
-            public Null Deserialize(ReadOnlySpan<byte> data, bool isNull, SerializationContext context)
+            public Null Deserialize(ReadOnlySpan<byte> data, bool isNull)
             {
                 if (!isNull)
                 {
@@ -62,6 +69,16 @@ namespace Confluent.Kafka
                 }
 
                 return null;
+            }
+
+            public void Deserialize(ReadOnlySpan<byte> data, bool isNull, out Null result)
+            {
+                if (!isNull)
+                {
+                    throw new ArgumentException("Deserializer<Null> may only be used to deserialize data that is null.");
+                }
+
+                result = null;
             }
         }
 
@@ -72,8 +89,13 @@ namespace Confluent.Kafka
 
         private class IgnoreDeserializer : IDeserializer<Ignore>
         {
-            public Ignore Deserialize(ReadOnlySpan<byte> data, bool isNull, SerializationContext context)
+            public Ignore Deserialize(ReadOnlySpan<byte> data, bool isNull)
                 => null;
+
+            public void Deserialize(ReadOnlySpan<byte> data, bool isNull, out Ignore result)
+            {
+                result = null;
+            }
         }
 
         /// <summary>
@@ -83,7 +105,7 @@ namespace Confluent.Kafka
 
         private class Int64Deserializer : IDeserializer<long>
         {
-            public long Deserialize(ReadOnlySpan<byte> data, bool isNull, SerializationContext context)
+            public long Deserialize(ReadOnlySpan<byte> data, bool isNull)
             {
                 if (isNull)
                 {
@@ -106,6 +128,29 @@ namespace Confluent.Kafka
                     (data[7]);
                 return result;
             }
+
+            public void Deserialize(ReadOnlySpan<byte> data, bool isNull, out long result)
+            {
+                if (isNull)
+                {
+                    throw new ArgumentNullException($"Null data encountered deserializing Int64 value.");
+                }
+
+                if (data.Length != 8)
+                {
+                    throw new ArgumentException($"Deserializer<Long> encountered data of length {data.Length}. Expecting data length to be 8.");
+                }
+
+                // network byte order -> big endian -> most significant byte in the smallest address.
+                result = ((long) data[0]) << 56 |
+                         ((long) (data[1])) << 48 |
+                         ((long) (data[2])) << 40 |
+                         ((long) (data[3])) << 32 |
+                         ((long) (data[4])) << 24 |
+                         ((long) (data[5])) << 16 |
+                         ((long) (data[6])) << 8 |
+                         (data[7]);
+            }
         }
 
         /// <summary>
@@ -115,7 +160,7 @@ namespace Confluent.Kafka
 
         private class Int32Deserializer : IDeserializer<int>
         {
-            public int Deserialize(ReadOnlySpan<byte> data, bool isNull, SerializationContext context)
+            public int Deserialize(ReadOnlySpan<byte> data, bool isNull)
             {
                 if (isNull)
                 {
@@ -134,6 +179,26 @@ namespace Confluent.Kafka
                     (((int)data[2]) << 8) |
                     (int)data[3];
             }
+
+            public void Deserialize(ReadOnlySpan<byte> data, bool isNull, out int result)
+            {
+                if (isNull)
+                {
+                    throw new ArgumentNullException($"Null data encountered deserializing Int32 value");
+                }
+
+                if (data.Length != 4)
+                {
+                    throw new ArgumentException($"Deserializer<Int32> encountered data of length {data.Length}. Expecting data length to be 4.");
+                }
+
+                // network byte order -> big endian -> most significant byte in the smallest address.
+                result =
+                    (((int)data[0]) << 24) |
+                    (((int)data[1]) << 16) |
+                    (((int)data[2]) << 8) |
+                    (int)data[3];
+            }
         }
 
         /// <summary>
@@ -143,7 +208,7 @@ namespace Confluent.Kafka
 
         private class SingleDeserializer : IDeserializer<float>
         {
-            public float Deserialize(ReadOnlySpan<byte> data, bool isNull, SerializationContext context)
+            public float Deserialize(ReadOnlySpan<byte> data, bool isNull)
             {
                 if (isNull)
                 {
@@ -161,21 +226,50 @@ namespace Confluent.Kafka
                     unsafe
                     {
                         float result = default(float);
-                        byte* p = (byte*)(&result);
+                        byte* p = (byte*) (&result);
                         *p++ = data[3];
                         *p++ = data[2];
                         *p++ = data[1];
-                        *p++ = data[0];
+                        *p = data[0];
                         return result;
                     }
                 }
                 else
                 {
-                    #if NETCOREAPP2_1
-                        return BitConverter.ToSingle(data);
-                    #else
-                        return BitConverter.ToSingle(data.ToArray(), 0);
-                    #endif
+                    return BitConverter.ToSingle(data);
+                }
+            }
+
+            public void Deserialize(ReadOnlySpan<byte> data, bool isNull, out float result)
+            {
+                if (isNull)
+                {
+                    throw new ArgumentNullException($"Null data encountered deserializing float value.");
+                }
+
+                if (data.Length != 4)
+                {
+                    throw new ArgumentException($"Deserializer<float> encountered data of length {data.Length}. Expecting data length to be 4.");
+                }
+
+                // network byte order -> big endian -> most significant byte in the smallest address.
+                if (BitConverter.IsLittleEndian)
+                {
+                    unsafe
+                    {
+                        fixed (void* pp = &result)
+                        {
+                            var p = (byte*) pp;
+                            *p = data[3];
+                            *(p + 1) = data[2];
+                            *(p + 2) = data[1];
+                            *(p + 3) = data[0];
+                        }
+                    }
+                }
+                else
+                {
+                    result = BitConverter.ToSingle(data);
                 }
             }
         }
@@ -187,7 +281,7 @@ namespace Confluent.Kafka
 
         private class DoubleDeserializer : IDeserializer<double>
         {
-            public double Deserialize(ReadOnlySpan<byte> data, bool isNull, SerializationContext context)
+            public double Deserialize(ReadOnlySpan<byte> data, bool isNull)
             {
                 if (isNull)
                 {
@@ -219,11 +313,46 @@ namespace Confluent.Kafka
                 }
                 else
                 {
-                    #if NETCOREAPP2_1
-                                    return BitConverter.ToDouble(data);
-                    #else
-                                    return BitConverter.ToDouble(data.ToArray(), 0);
-                    #endif
+                    return BitConverter.ToDouble(data);
+                }
+            }
+
+            public void Deserialize(ReadOnlySpan<byte> data, bool isNull, out double result)
+            {
+                if (isNull)
+                {
+                    throw new ArgumentNullException($"Null data encountered deserializing double value.");
+                }
+
+                if (data.Length != 8)
+                {
+                    throw new ArgumentException($"Deserializer<double> encountered data of length {data.Length}. Expecting data length to be 8.");
+                }
+
+                // network byte order -> big endian -> most significant byte in the smallest address.
+                if (BitConverter.IsLittleEndian)
+                {
+                    unsafe
+                    {
+                        
+                        // double result = default(double);
+                        fixed (void* pp = &result)
+                        {
+                            var p = (byte*) pp;
+                            *p = data[7];
+                            *(p+1) = data[6];
+                            *(p+2) = data[5];
+                            *(p+3) = data[4];
+                            *(p+4) = data[3];
+                            *(p+5) = data[2];
+                            *(p+6) = data[1];
+                            *(p+7) = data[0];
+                        }
+                    }
+                }
+                else
+                {
+                    result = BitConverter.ToDouble(data);
                 }
             }
         }
@@ -238,10 +367,20 @@ namespace Confluent.Kafka
 
         private class ByteArrayDeserializer : IDeserializer<byte[]>
         {
-            public byte[] Deserialize(ReadOnlySpan<byte> data, bool isNull, SerializationContext context)
+            public byte[] Deserialize(ReadOnlySpan<byte> data, bool isNull)
             {
                 if (isNull) { return null; }
                 return data.ToArray();
+            }
+
+            public void Deserialize(ReadOnlySpan<byte> data, bool isNull, out byte[] result)
+            {
+                if (isNull)
+                {
+                    result = null; return; 
+                }
+                
+                result = data.ToArray();
             }
         }
     }
