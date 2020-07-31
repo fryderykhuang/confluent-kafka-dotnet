@@ -363,8 +363,7 @@ namespace Confluent.Kafka
         ///     property of the exception.
         /// </exception>
         void Commit(IEnumerable<TopicPartitionOffset> offsets);
-
-
+        
         /// <summary>
         ///     Commits an offset based on the
         ///     topic/partition/offset of a ConsumeResult.

@@ -17,7 +17,7 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <LangVersion>8</LangVersion>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Version>1.4.400</Version>
+    <Version>1.4.403</Version>
   </PropertyGroup>
 
   <ItemGroup>

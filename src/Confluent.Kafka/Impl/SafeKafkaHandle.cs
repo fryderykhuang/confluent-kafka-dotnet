@@ -924,6 +924,28 @@ namespace Confluent.Kafka.Impl
             return result.Select(r => r.TopicPartitionOffset).ToList();
         }
 
+        internal void CommitNoReturn(IEnumerable<TopicPartitionOffset> offsets)
+        {
+            ThrowIfHandleClosed();
+
+            if (offsets != null && offsets.Count() == 0)
+            {
+                return;
+            }
+
+            IntPtr cOffsets = GetCTopicPartitionList(offsets);
+            ErrorCode err = Librdkafka.commit(handle, cOffsets, false);
+            if (cOffsets != IntPtr.Zero)
+            {
+                Librdkafka.topic_partition_list_destroy(cOffsets);
+            }
+            if (err != ErrorCode.NoError)
+            {
+                throw new KafkaException(CreatePossiblyFatalError(err, null));
+            }
+        }
+
+        
         internal void Seek(string topic, Partition partition, Offset offset, int millisecondsTimeout)
         {
             ThrowIfHandleClosed();

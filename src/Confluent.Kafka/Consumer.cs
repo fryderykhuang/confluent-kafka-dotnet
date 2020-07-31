@@ -365,12 +365,11 @@ namespace Confluent.Kafka
         public List<TopicPartitionOffset> Commit()
             // TODO: use a librdkafka queue for this.
             => kafkaHandle.Commit(null);
-
-
+        
         /// <inheritdoc/>
         public void Commit(IEnumerable<TopicPartitionOffset> offsets)
             // TODO: use a librdkafka queue for this.
-            => kafkaHandle.Commit(offsets);
+            => kafkaHandle.CommitNoReturn(offsets);
 
 
         /// <inheritdoc/>
