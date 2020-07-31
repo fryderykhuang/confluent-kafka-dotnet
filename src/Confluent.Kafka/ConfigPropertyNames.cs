@@ -56,6 +56,8 @@ namespace Confluent.Kafka
             ///     default: all
             /// </summary>
             public const string DeliveryReportFields = "dotnet.producer.delivery.report.fields";
+
+            public const string DeliveryReportAsUserState = "dotnet.producer.delivery.report.as.user.state";
         }
         
 
@@ -76,6 +78,8 @@ namespace Confluent.Kafka
             ///     default: all
             /// </summary>
             public const string ConsumeResultFields = "dotnet.consumer.consume.result.fields";
+
+            public const string DefaultConsumePollTimeoutMs = "dotnet.consumer.consume.poll.timeout";
         }
 
         /// <summary>

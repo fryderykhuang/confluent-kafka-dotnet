@@ -363,8 +363,7 @@ namespace Confluent.Kafka
         ///     property of the exception.
         /// </exception>
         void Commit(IEnumerable<TopicPartitionOffset> offsets);
-
-
+        
         /// <summary>
         ///     Commits an offset based on the
         ///     topic/partition/offset of a ConsumeResult.
@@ -625,6 +624,7 @@ namespace Confluent.Kafka
         /// </exception>
         void Close();
 
+        (bool HasResult, int Partition, DateTime Timestamp, long Offset) TryConsumeFast(out TKey key, out TValue value);
 
         /// <summary>
         ///     The current consumer group metadata associated with this consumer,

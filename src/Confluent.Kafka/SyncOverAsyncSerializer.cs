@@ -66,10 +66,11 @@ namespace Confluent.Kafka.SyncOverAsync
         /// <param name="context">
         ///     Context relevant to the serialize operation.
         /// </param>
+        /// <param name="scratchBuffer"></param>
         /// <returns>
         ///     the serialized data.
         /// </returns>
-        public byte[] Serialize(T data, SerializationContext context)
+        public ReadOnlySpan<byte> Serialize(T data, SerializationContext context, byte[] scratchBuffer)
             => asyncSerializer.SerializeAsync(data, context)
                 .ConfigureAwait(continueOnCapturedContext: false)
                 .GetAwaiter()

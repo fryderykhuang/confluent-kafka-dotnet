@@ -64,18 +64,22 @@ namespace Confluent.Kafka.SyncOverAsync
         /// <param name="isNull">
         ///     Whether or not the value is null.
         /// </param>
-        /// <param name="context">
-        ///     Context relevant to the deserialize
-        ///     operation.
-        /// </param>
         /// <returns>
         ///     The deserialized value.
         /// </returns>
-        public T Deserialize(ReadOnlySpan<byte> data, bool isNull, SerializationContext context)
-            => asyncDeserializer.DeserializeAsync(new ReadOnlyMemory<byte>(data.ToArray()), isNull, context)
+        public T Deserialize(ReadOnlySpan<byte> data, bool isNull)
+            => asyncDeserializer.DeserializeAsync(new ReadOnlyMemory<byte>(data.ToArray()), isNull, default /* TODO */)
                     .ConfigureAwait(continueOnCapturedContext: false)
                     .GetAwaiter()
                     .GetResult();
+
+        public void Deserialize(ReadOnlySpan<byte> data, bool isNull, out T result)
+        {
+            result = asyncDeserializer.DeserializeAsync(new ReadOnlyMemory<byte>(data.ToArray()), isNull, default /* TODO */)
+                .ConfigureAwait(continueOnCapturedContext: false)
+                .GetAwaiter()
+                .GetResult();
+        }
     }
 
     /// <summary>

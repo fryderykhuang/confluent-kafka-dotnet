@@ -106,6 +106,14 @@ namespace Confluent.Kafka
             Message<TKey, TValue> message,
             CancellationToken cancellationToken = default(CancellationToken));
 
+        Task<DeliveryResult<TKey, TValue>> ProduceAsync(
+            string topic,
+            int partition,
+            Message<TKey, TValue> message, CancellationToken cancellationToken);
+
+        Task<DeliveryResult<TKey, TValue>> ProduceAsyncUsingAsyncSerializer(
+            TopicPartition topicPartition,
+            Message<TKey, TValue> message, CancellationToken cancellationToken);
 
         /// <summary>
         ///     Asynchronously send a single message to a
@@ -187,7 +195,14 @@ namespace Confluent.Kafka
             Message<TKey, TValue> message,
             Action<DeliveryReport<TKey, TValue>> deliveryHandler = null);
 
-        
+        void BeginProduce(string topic, int partition, TKey key, TValue value, IntPtr userState,
+            Timestamp timestamp = new Timestamp(),
+            Headers headers = null);
+
+        void BeginProduceNull(string topic, int partition, TKey key, IntPtr userState,
+            Timestamp timestamp = new Timestamp(),
+            Headers headers = null);
+
         /// <summary>
         ///     Poll for callback events.
         /// </summary>
@@ -204,6 +219,8 @@ namespace Confluent.Kafka
         ///     lifetime of the producer.
         /// </returns>
         int Poll(TimeSpan timeout);
+
+        int Poll(int timeoutMs);
 
 
         /// <summary>

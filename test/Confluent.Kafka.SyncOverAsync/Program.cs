@@ -36,7 +36,7 @@ namespace Confluent.Kafka.SyncOverAsync
         public async Task<byte[]> SerializeAsync(string data, SerializationContext context)
         {
             await Task.Delay(500);
-            return Serializers.Utf8.Serialize(data, context);
+            return Serializers.Utf8.Serialize(data, context).ToArray();
         }
 
         public ISerializer<string> SyncOverAsync()
@@ -47,7 +47,7 @@ namespace Confluent.Kafka.SyncOverAsync
 
     class SimpleSyncSerializer : ISerializer<string>
     {
-        public byte[] Serialize(string data, SerializationContext context)
+        public ReadOnlySpan<byte> Serialize(string data, SerializationContext context)
         {
             Thread.Sleep(500);
             return Serializers.Utf8.Serialize(data, context);
