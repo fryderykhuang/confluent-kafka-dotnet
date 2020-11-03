@@ -17,11 +17,11 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <LangVersion>8</LangVersion>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Version>1.5.100</Version>
+    <Version>1.5.200</Version>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="librdkafka.redist" Version="1.5.0">
+    <PackageReference Include="librdkafka.redist" Version="1.5.2">
         <PrivateAssets Condition="'$(TargetFrameworkIdentifier)' == '.NETFramework'">None</PrivateAssets>
     </PackageReference>
     <PackageReference Include="System.Memory" Version="4.5.3" />

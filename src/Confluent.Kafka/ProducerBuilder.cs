@@ -49,6 +49,11 @@ namespace Confluent.Kafka
         internal protected Action<IProducer<TKey, TValue>, string> StatisticsHandler { get; set; }
 
         internal protected DeliveryReportReceivedDelegate DeliveryReportReceivedHandler { get; set; }
+
+        /// <summary>
+        ///     The configured OAuthBearer Token Refresh handler.
+        /// </summary>
+        internal protected Action<IProducer<TKey, TValue>, string> OAuthBearerTokenRefreshHandler { get; set; }
         
 
         /// <summary>
@@ -88,6 +93,10 @@ namespace Confluent.Kafka
                 deliveryReportReceivedHandler = this.DeliveryReportReceivedHandler == null
                     ? default(InternalDeliveryReportReceivedDelegate)
                     : (ref rd_kafka_message msg) => this.DeliveryReportReceivedHandler(producer, ref msg)
+                    : stats => this.StatisticsHandler(producer, stats),
+                oAuthBearerTokenRefreshHandler = this.OAuthBearerTokenRefreshHandler == null
+                    ? default(Action<string>)
+                    : oAuthBearerConfig => this.OAuthBearerTokenRefreshHandler(producer, oAuthBearerConfig)
             };
         }
 
@@ -189,6 +198,38 @@ namespace Confluent.Kafka
                 throw new InvalidOperationException("Delivery report received handler may not be specified more than once.");
             }
             this.DeliveryReportReceivedHandler = handler;
+            return this;
+        }
+
+        /// <summary>
+        ///     Set SASL/OAUTHBEARER token refresh callback in provided
+        ///     conf object. The SASL/OAUTHBEARER token refresh callback
+        ///     is triggered via <see cref="IProducer{TKey,TValue}.Poll"/>
+        ///     whenever OAUTHBEARER is the SASL mechanism and a token
+        ///     needs to be retrieved, typically based on the configuration
+        ///     defined in sasl.oauthbearer.config. The callback should
+        ///     invoke <see cref="ClientExtensions.OAuthBearerSetToken"/>
+        ///     or <see cref="ClientExtensions.OAuthBearerSetTokenFailure"/>
+        ///     to indicate success or failure, respectively.
+        ///
+        ///     An unsecured JWT refresh handler is provided by librdkafka
+        ///     for development and testing purposes, it is enabled by
+        ///     setting the enable.sasl.oauthbearer.unsecure.jwt property
+        ///     to true and is mutually exclusive to using a refresh callback.
+        /// </summary>
+        /// <param name="oAuthBearerTokenRefreshHandler">
+        ///     the callback to set; callback function arguments:
+        ///     IConsumer - instance of the consumer which should be used to
+        ///     set token or token failure string - Value of configuration
+        ///     property sasl.oauthbearer.config
+        /// </param>
+        public ProducerBuilder<TKey, TValue> SetOAuthBearerTokenRefreshHandler(Action<IProducer<TKey, TValue>, string> oAuthBearerTokenRefreshHandler)
+        {
+            if (this.OAuthBearerTokenRefreshHandler != null)
+            {
+                throw new InvalidOperationException("OAuthBearer token refresh handler may not be specified more than once.");
+            }
+            this.OAuthBearerTokenRefreshHandler = oAuthBearerTokenRefreshHandler;
             return this;
         }
 
