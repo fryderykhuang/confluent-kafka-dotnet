@@ -92,8 +92,7 @@ namespace Confluent.Kafka
                     : stats => this.StatisticsHandler(producer, stats),
                 deliveryReportReceivedHandler = this.DeliveryReportReceivedHandler == null
                     ? default(InternalDeliveryReportReceivedDelegate)
-                    : (ref rd_kafka_message msg) => this.DeliveryReportReceivedHandler(producer, ref msg)
-                    : stats => this.StatisticsHandler(producer, stats),
+                    : (ref rd_kafka_message msg) => this.DeliveryReportReceivedHandler(producer, ref msg),
                 oAuthBearerTokenRefreshHandler = this.OAuthBearerTokenRefreshHandler == null
                     ? default(Action<string>)
                     : oAuthBearerConfig => this.OAuthBearerTokenRefreshHandler(producer, oAuthBearerConfig)

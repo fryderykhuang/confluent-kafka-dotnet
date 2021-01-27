@@ -567,6 +567,9 @@ namespace Confluent.Kafka
 
             var modifiedConfig = Library.NameAndVersionConfig
                 .Concat(config.Where(prop => prop.Key != ConfigPropertyNames.Consumer.ConsumeResultFields))
+#if LIB14
+                .Where(x => x.Key != "allow.auto.create.topics")
+#endif
                 .ToList();
 
             var enabledFieldsObj = config.FirstOrDefault(prop => prop.Key == ConfigPropertyNames.Consumer.ConsumeResultFields).Value;
